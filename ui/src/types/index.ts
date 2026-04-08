@@ -1,0 +1,57 @@
+export interface VariableInfo {
+  units: string;
+  label: string;
+  min: number;
+  max: number;
+  display_min: number;
+  display_max: number;
+}
+
+export interface Manifest {
+  grid: { width: number; height: number; resolution_deg: number };
+  lon_range: [number, number];
+  lat_range: [number, number];
+  weeks: number[];
+  stats: string[];
+  variables: Record<string, VariableInfo>;
+}
+
+export interface Filter {
+  id: string;
+  variable: string;
+  stat: string;
+  operator: "<" | ">";
+  value: number;
+}
+
+export interface TileRequest {
+  variable: string;
+  stat: string;
+}
+
+export interface GridCell {
+  lon: number;
+  lat: number;
+  index: number;
+  value: number;
+  color: [number, number, number, number];
+  polygon: [number, number][];
+  passesFilter: boolean;
+}
+
+export interface CellStats {
+  variable: string;
+  label: string;
+  units: string;
+  stats: Record<string, number | null>;
+}
+
+export interface HoveredCell {
+  x: number;
+  y: number;
+  lon: number;
+  lat: number;
+  index: number;
+  data: CellStats[];
+  filterResults: { filterId: string; variable: string; stat: string; label: string; passes: boolean }[];
+}

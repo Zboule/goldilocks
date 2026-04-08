@@ -1,0 +1,8 @@
+xarray
+zarr
+gcsfs
+dask
+netcdf4
+fsspec
+cdsapi
+tqdm
