@@ -1,4 +1,4 @@
-import { weekToMonth } from "../../lib/gridGeometry";
+import { weekToDateRange } from "../../lib/gridGeometry";
 
 interface Props {
   week: number;
@@ -56,8 +56,8 @@ export default function WeekSlider({ week, weeks, onChange }: Props) {
           })}
         </div>
       </div>
-      <span className="w-20 text-right tabular-nums text-sm text-gray-600 shrink-0 mt-0.5">
-        W{week} ~ {weekToMonth(week)}
+      <span className="w-36 text-right tabular-nums text-sm text-gray-600 shrink-0 mt-0.5 whitespace-nowrap">
+        {weekToDateRange(week)}
       </span>
     </div>
   );

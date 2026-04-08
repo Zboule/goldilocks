@@ -45,3 +45,12 @@ const MONTH_NAMES = [
 export function weekToMonth(week: number): string {
   return MONTH_NAMES[Math.min(11, Math.floor((week - 1) / 4.33))];
 }
+
+export function weekToDateRange(week: number): string {
+  const jan1 = new Date(Date.UTC(2025, 0, 1));
+  const start = new Date(jan1.getTime() + (week - 1) * 7 * 86400000);
+  const end = new Date(start.getTime() + 6 * 86400000);
+  const fmt = (d: Date) =>
+    `${MONTH_NAMES[d.getUTCMonth()]} ${d.getUTCDate()}`;
+  return `${fmt(start)} – ${fmt(end)}`;
+}

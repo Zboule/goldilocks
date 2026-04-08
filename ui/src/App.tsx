@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useManifest } from "./hooks/useManifest";
 import { useFilters } from "./hooks/useFilters";
 import { useFilteredGrid } from "./hooks/useFilteredGrid";
@@ -15,8 +15,14 @@ export default function App() {
 
   const [displayVariable, setDisplayVariable] = useState("temperature_day");
   const [displayStat, setDisplayStat] = useState("mean");
-  const [week, setWeek] = useState(1);
+  const [week, setWeek] = useState<number | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    if (manifest && manifest.weeks.length > 0 && week === null) {
+      setWeek(manifest.weeks[0]);
+    }
+  }, [manifest, week]);
 
   const { filters, addFilter, removeFilter, updateFilter, clearFilters, loadPreset } =
     useFilters();
@@ -26,18 +32,18 @@ export default function App() {
     displayVariable,
     displayStat,
     filters,
-    week,
+    week ?? 0,
   );
 
-  usePreloadWeek(week, manifest);
+  usePreloadWeek(week ?? 0, manifest);
 
   const { hoveredCell, onCellHover } = useHoveredCell(
     manifest,
-    week,
+    week ?? 0,
     filters,
   );
 
-  if (manifestLoading || !manifest) {
+  if (manifestLoading || !manifest || week === null) {
     return (
       <div className="flex items-center justify-center h-screen text-gray-500">
         Loading...
