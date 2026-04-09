@@ -47,7 +47,7 @@ export default function App() {
     displayVariable,
     displayStat,
     filters,
-    period ?? 0,
+    period ?? 1,
   );
 
   // Send static polygons once when ready
@@ -64,11 +64,11 @@ export default function App() {
     }
   }, [colors, version, staticCells]);
 
-  usePreloadPeriod(period ?? 0, manifest, displayVariable, displayStat, filters);
+  usePreloadPeriod(period ?? 1, manifest, displayVariable, displayStat, filters);
 
   const { hoveredCell, onCellHover } = useHoveredCell(
     manifest,
-    period ?? 0,
+    period ?? 1,
     displayVariable,
     filters,
   );
