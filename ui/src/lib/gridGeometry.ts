@@ -37,20 +37,8 @@ export function formatLon(lon: number): string {
   return lon >= 0 ? `${abs}°E` : `${abs}°W`;
 }
 
-const MONTH_NAMES = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
-export function weekToMonth(week: number): string {
-  return MONTH_NAMES[Math.min(11, Math.floor((week - 1) / 4.33))];
-}
-
-export function weekToDateRange(week: number): string {
-  const jan1 = new Date(Date.UTC(2025, 0, 1));
-  const start = new Date(jan1.getTime() + (week - 1) * 7 * 86400000);
-  const end = new Date(start.getTime() + 6 * 86400000);
-  const fmt = (d: Date) =>
-    `${MONTH_NAMES[d.getUTCMonth()]} ${d.getUTCDate()}`;
-  return `${fmt(start)} – ${fmt(end)}`;
+export function periodToLabel(period: number, labels: string[]): string {
+  const idx = period - 1;
+  if (idx >= 0 && idx < labels.length) return labels[idx];
+  return `Period ${period}`;
 }

@@ -5,15 +5,19 @@ export interface VariableInfo {
   max: number;
   display_min: number;
   display_max: number;
+  encode_min?: number;
+  encode_max?: number;
 }
 
 export interface Manifest {
   grid: { width: number; height: number; resolution_deg: number };
   lon_range: [number, number];
   lat_range: [number, number];
-  weeks: number[];
+  periods: number[];
+  period_labels: string[];
   stats: string[];
   variables: Record<string, VariableInfo>;
+  encoding?: "float32" | "uint16";
 }
 
 export interface Filter {

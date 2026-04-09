@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { useManifest } from "./hooks/useManifest";
 import { useFilters } from "./hooks/useFilters";
 import { useFilteredGrid } from "./hooks/useFilteredGrid";
-import { usePreloadWeek } from "./hooks/usePreloadWeek";
+import { usePreloadPeriod } from "./hooks/usePreloadPeriod";
 import { useHoveredCell } from "./hooks/useHoveredCell";
+import { setManifest } from "./lib/tileCache";
 import ControlBar from "./components/controls/ControlBar";
 import FilterSidebar from "./components/controls/FilterSidebar";
 import MapView from "./components/MapView";
@@ -15,14 +16,17 @@ export default function App() {
 
   const [displayVariable, setDisplayVariable] = useState("temperature_day");
   const [displayStat, setDisplayStat] = useState("mean");
-  const [week, setWeek] = useState<number | null>(null);
+  const [period, setPeriod] = useState<number | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    if (manifest && manifest.weeks.length > 0 && week === null) {
-      setWeek(manifest.weeks[0]);
+    if (manifest) {
+      setManifest(manifest);
+      if (manifest.periods.length > 0 && period === null) {
+        setPeriod(manifest.periods[0]);
+      }
     }
-  }, [manifest, week]);
+  }, [manifest, period]);
 
   const { filters, addFilter, removeFilter, updateFilter, clearFilters, loadPreset } =
     useFilters();
@@ -32,18 +36,19 @@ export default function App() {
     displayVariable,
     displayStat,
     filters,
-    week ?? 0,
+    period ?? 0,
   );
 
-  usePreloadWeek(week ?? 0, manifest);
+  usePreloadPeriod(period ?? 0, manifest, displayVariable, filters);
 
   const { hoveredCell, onCellHover } = useHoveredCell(
     manifest,
-    week ?? 0,
+    period ?? 0,
+    displayVariable,
     filters,
   );
 
-  if (manifestLoading || !manifest || week === null) {
+  if (manifestLoading || !manifest || period === null) {
     return (
       <div className="flex items-center justify-center h-screen text-gray-500">
         Loading...
@@ -55,20 +60,18 @@ export default function App() {
 
   return (
     <div className="w-full h-screen flex flex-col overflow-hidden">
-      {/* Top bar */}
       <ControlBar
         manifest={manifest}
         displayVariable={displayVariable}
         displayStat={displayStat}
-        week={week}
+        period={period}
         filterCount={filters.length}
         onDisplayVariableChange={setDisplayVariable}
         onDisplayStatChange={setDisplayStat}
-        onWeekChange={setWeek}
+        onPeriodChange={setPeriod}
         onToggleFilters={() => setSidebarOpen((v) => !v)}
       />
 
-      {/* Content: sidebar + map */}
       <div className="flex flex-1 min-h-0">
         <FilterSidebar
           open={sidebarOpen}

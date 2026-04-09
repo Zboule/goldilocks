@@ -2,3 +2,5 @@ data/raw*
 data/tiles
 data/processed
 node_modules
+.venv
+logs/

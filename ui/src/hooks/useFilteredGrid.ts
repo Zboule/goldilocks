@@ -10,7 +10,7 @@ export function useFilteredGrid(
   displayVariable: string,
   displayStat: string,
   filters: Filter[],
-  week: number,
+  period: number,
 ) {
   const tileRequests = useMemo<TileRequest[]>(() => {
     const filterReqs = getFilterTileRequests(filters);
@@ -24,7 +24,7 @@ export function useFilteredGrid(
     return filterReqs;
   }, [filters, displayVariable, displayStat]);
 
-  const { tiles, loading } = useTiles(tileRequests, week);
+  const { tiles, loading } = useTiles(tileRequests, period);
 
   const cells = useMemo<GridCell[]>(() => {
     if (!manifest || loading) return [];

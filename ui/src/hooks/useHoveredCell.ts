@@ -21,7 +21,8 @@ interface HoverInput {
 
 export function useHoveredCell(
   manifest: Manifest | null,
-  week: number,
+  period: number,
+  displayVariable: string,
   filters: Filter[],
 ) {
   const [hoveredCell, setHoveredCell] = useState<HoveredCell | null>(null);
@@ -40,11 +41,19 @@ export function useHoveredCell(
         info.index, width, lonStart, latStart, resolution_deg,
       );
 
+      // Collect variables to show: display var + filter vars (deduplicated)
+      const varsToShow = new Set<string>([displayVariable]);
+      for (const f of filters) {
+        varsToShow.add(f.variable);
+      }
+
       const data: CellStats[] = [];
-      for (const [varKey, varInfo] of Object.entries(manifest.variables)) {
+      for (const varKey of varsToShow) {
+        const varInfo = manifest.variables[varKey];
+        if (!varInfo) continue;
         const stats: Record<string, number | null> = {};
         for (const stat of manifest.stats) {
-          stats[stat] = getCachedValue(varKey, stat, week, info.index);
+          stats[stat] = getCachedValue(varKey, stat, period, info.index);
         }
         data.push({
           variable: varKey,
@@ -55,7 +64,7 @@ export function useHoveredCell(
       }
 
       const filterResults = filters.map((f) => {
-        const value = getCachedValue(f.variable, f.stat, week, info.index);
+        const value = getCachedValue(f.variable, f.stat, period, info.index);
         const passes = evaluateFilter(f, value);
         const varInfo = manifest.variables[f.variable];
         const label = describeFilter(
@@ -77,7 +86,7 @@ export function useHoveredCell(
         filterResults,
       });
     },
-    [manifest, week, filters],
+    [manifest, period, displayVariable, filters],
   );
 
   return { hoveredCell, onCellHover };

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import type { TileRequest } from "../types";
 import { fetchTile, getCached } from "../lib/tileCache";
 
-export function useTiles(requests: TileRequest[], week: number) {
+export function useTiles(requests: TileRequest[], period: number) {
   const [tiles, setTiles] = useState<Map<string, Float32Array>>(new Map());
   const [loading, setLoading] = useState(false);
   const versionRef = useRef(0);
@@ -22,7 +22,7 @@ export function useTiles(requests: TileRequest[], week: number) {
 
     for (const req of requests) {
       const key = `${req.variable}/${req.stat}`;
-      const cached = getCached(req.variable, req.stat, week);
+      const cached = getCached(req.variable, req.stat, period);
       if (cached) {
         alreadyCached.set(key, cached);
       } else {
@@ -38,7 +38,7 @@ export function useTiles(requests: TileRequest[], week: number) {
 
     Promise.all(
       toFetch.map((req) =>
-        fetchTile(req.variable, req.stat, week).then(
+        fetchTile(req.variable, req.stat, period).then(
           (data) => [req, data] as const,
         ),
       ),
@@ -51,7 +51,7 @@ export function useTiles(requests: TileRequest[], week: number) {
       setTiles(merged);
       setLoading(false);
     });
-  }, [requests, week]);
+  }, [requests, period]);
 
   return { tiles, loading, allLoaded: !loading };
 }

@@ -1,16 +1,16 @@
 import type { Manifest } from "../../types";
 import DisplaySelector from "./DisplaySelector";
-import WeekSlider from "./WeekSlider";
+import PeriodSlider from "./PeriodSlider";
 
 interface Props {
   manifest: Manifest;
   displayVariable: string;
   displayStat: string;
-  week: number;
+  period: number;
   filterCount: number;
   onDisplayVariableChange: (v: string) => void;
   onDisplayStatChange: (s: string) => void;
-  onWeekChange: (w: number) => void;
+  onPeriodChange: (p: number) => void;
   onToggleFilters: () => void;
 }
 
@@ -18,11 +18,11 @@ export default function ControlBar({
   manifest,
   displayVariable,
   displayStat,
-  week,
+  period,
   filterCount,
   onDisplayVariableChange,
   onDisplayStatChange,
-  onWeekChange,
+  onPeriodChange,
   onToggleFilters,
 }: Props) {
   return (
@@ -65,10 +65,11 @@ export default function ControlBar({
 
       <div className="h-5 w-px bg-gray-300" />
 
-      <WeekSlider
-        week={week}
-        weeks={manifest.weeks}
-        onChange={onWeekChange}
+      <PeriodSlider
+        period={period}
+        periods={manifest.periods}
+        periodLabels={manifest.period_labels}
+        onChange={onPeriodChange}
       />
     </div>
   );
