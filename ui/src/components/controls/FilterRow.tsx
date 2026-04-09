@@ -1,6 +1,7 @@
 import type { Filter, Manifest } from "../../types";
 import VariableSelect from "./VariableSelect";
 import StatSelect from "./StatSelect";
+import Select from "./Select";
 
 interface Props {
   filter: Filter;
@@ -8,6 +9,11 @@ interface Props {
   onChange: (patch: Partial<Filter>) => void;
   onRemove: () => void;
 }
+
+const OPERATOR_OPTIONS = [
+  { value: "<", label: "<" },
+  { value: ">", label: ">" },
+];
 
 export default function FilterRow({ filter, manifest, onChange, onRemove }: Props) {
   const varInfo = manifest.variables[filter.variable];
@@ -34,14 +40,12 @@ export default function FilterRow({ filter, manifest, onChange, onRemove }: Prop
           stats={manifest.stats}
           className="text-xs"
         />
-        <select
+        <Select
           value={filter.operator}
-          onChange={(e) => onChange({ operator: e.target.value as "<" | ">" })}
-          className="rounded border border-gray-300 bg-white px-1 py-0.5 text-xs w-10 text-center"
-        >
-          <option value="<">&lt;</option>
-          <option value=">">&gt;</option>
-        </select>
+          onChange={(v) => onChange({ operator: v as "<" | ">" })}
+          options={OPERATOR_OPTIONS}
+          className="text-xs w-12 text-center"
+        />
         <input
           type="number"
           value={filter.value}

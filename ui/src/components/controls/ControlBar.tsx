@@ -26,7 +26,7 @@ export default function ControlBar({
   onToggleFilters,
 }: Props) {
   return (
-    <div className="shrink-0 bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-4 z-10">
+    <div className="shrink-0 bg-white border-b border-gray-200 px-4 pt-4 pb-5 flex items-center gap-4 z-10">
       <button
         onClick={onToggleFilters}
         className="shrink-0 flex items-center gap-1.5 rounded border border-gray-300 bg-white hover:bg-gray-50 px-2.5 py-1 text-sm transition-colors"

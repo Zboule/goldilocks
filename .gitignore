@@ -5,3 +5,6 @@ node_modules
 .venv
 logs/
 *.tar.gz
+dist
+.cursor
+*.tsbuildinfo

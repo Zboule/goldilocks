@@ -1,9 +1,9 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useImperativeHandle, forwardRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Deck } from "@deck.gl/core";
 import { PolygonLayer } from "@deck.gl/layers";
-import type { GridCell } from "../types";
+import type { StaticCell } from "../hooks/useStaticGrid";
 
 interface HoverInfo {
   index: number;
@@ -11,29 +11,61 @@ interface HoverInfo {
   y: number;
 }
 
-interface Props {
-  cells: GridCell[];
-  resolution: number;
-  onHover?: (info: HoverInfo | null) => void;
+export interface MapViewHandle {
+  setPolygons: (cells: StaticCell[]) => void;
+  updateColors: (colors: Uint8Array, version: number) => void;
 }
 
-export default function MapView({ cells, resolution, onHover }: Props) {
+interface Props {
+  onHover?: (info: HoverInfo | null) => void;
+  onReady?: () => void;
+}
+
+const MapView = forwardRef<MapViewHandle, Props>(({ onHover, onReady }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const deckRef = useRef<Deck | null>(null);
   const onHoverRef = useRef(onHover);
+  const onReadyRef = useRef(onReady);
+  const cellsRef = useRef<StaticCell[]>([]);
+  const colorsRef = useRef<Uint8Array | null>(null);
+  const colorVersionRef = useRef(0);
   onHoverRef.current = onHover;
+  onReadyRef.current = onReady;
 
-  const updateDeck = useCallback(() => {
+  useImperativeHandle(ref, () => ({
+    setPolygons(cells: StaticCell[]) {
+      cellsRef.current = cells;
+      if (deckRef.current && colorsRef.current) {
+        updateDeckLayer();
+      }
+    },
+    updateColors(colors: Uint8Array, version: number) {
+      colorsRef.current = colors;
+      colorVersionRef.current = version;
+      if (deckRef.current && cellsRef.current.length > 0) {
+        updateDeckLayer();
+      }
+    },
+  }), []);
+
+  function updateDeckLayer() {
     if (!deckRef.current) return;
+    const cells = cellsRef.current;
+    const colors = colorsRef.current;
+    const version = colorVersionRef.current;
 
     deckRef.current.setProps({
       layers: [
-        new PolygonLayer<GridCell>({
+        new PolygonLayer<StaticCell>({
           id: "heatmap",
           data: cells,
           getPolygon: (d) => d.polygon,
-          getFillColor: (d) => d.color,
+          getFillColor: (_d, { index }) => {
+            if (!colors) return [0, 0, 0, 0];
+            const off = index * 4;
+            return [colors[off], colors[off + 1], colors[off + 2], colors[off + 3]];
+          },
           getLineWidth: 0,
           stroked: false,
           filled: true,
@@ -41,10 +73,13 @@ export default function MapView({ cells, resolution, onHover }: Props) {
           autoHighlight: true,
           highlightColor: [255, 255, 255, 80],
           extruded: false,
+          updateTriggers: {
+            getFillColor: [version],
+          },
         }),
       ],
     });
-  }, [cells, resolution]);
+  }
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -99,7 +134,7 @@ export default function MapView({ cells, resolution, onHover }: Props) {
           radius: 0,
         });
         if (picked?.object) {
-          const cell = picked.object as GridCell;
+          const cell = picked.object as StaticCell;
           onHoverRef.current?.({
             index: cell.index,
             x: e.clientX,
@@ -116,7 +151,7 @@ export default function MapView({ cells, resolution, onHover }: Props) {
 
       deckRef.current = deck;
       mapRef.current = map;
-      updateDeck();
+      onReadyRef.current?.();
     });
 
     const resizeObserver = new ResizeObserver(() => {
@@ -133,9 +168,8 @@ export default function MapView({ cells, resolution, onHover }: Props) {
     };
   }, []);
 
-  useEffect(() => {
-    updateDeck();
-  }, [updateDeck]);
-
   return <div ref={containerRef} className="w-full h-full relative" />;
-}
+});
+
+MapView.displayName = "MapView";
+export default MapView;

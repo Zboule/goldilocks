@@ -7,15 +7,22 @@ let _manifest: Manifest | null = null;
 let _landIndex: Uint32Array | null = null;
 let _landIndexPromise: Promise<Uint32Array> | null = null;
 
+let _manifestVersion = 0;
+
 export function setManifest(m: Manifest) {
   _manifest = m;
+  _manifestVersion++;
+}
+
+export function getManifestVersion(): number {
+  return _manifestVersion;
 }
 
 async function getLandIndex(): Promise<Uint32Array> {
   if (_landIndex) return _landIndex;
   if (_landIndexPromise) return _landIndexPromise;
 
-  _landIndexPromise = fetch("/tiles/land_index.bin")
+  _landIndexPromise = fetch(`${import.meta.env.BASE_URL}tiles/land_index.bin`)
     .then((r) => r.arrayBuffer())
     .then((buf) => {
       _landIndex = new Uint32Array(buf);
@@ -73,13 +80,17 @@ export async function fetchTile(
   const existing = inflight.get(key);
   if (existing) return existing;
 
-  const encoding = _manifest?.encoding ?? "float32";
-  const gridSize = _manifest
-    ? _manifest.grid.width * _manifest.grid.height
-    : 0;
+  if (!_manifest) {
+    return Promise.resolve(new Float32Array(0));
+  }
+
+  const encoding = _manifest.encoding ?? "float32";
+  const gridSize = _manifest.grid.width * _manifest.grid.height;
 
   const promise = (async () => {
-    const buf = await fetch(`/tiles/${key}.bin`).then((r) => r.arrayBuffer());
+    const resp = await fetch(`${import.meta.env.BASE_URL}tiles/${key}.bin`);
+    const buf = await resp.arrayBuffer();
+
     let data: Float32Array;
 
     if (encoding === "uint8-land-only") {

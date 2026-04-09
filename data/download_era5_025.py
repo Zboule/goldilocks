@@ -91,10 +91,13 @@ def download_chunk(ds: xr.Dataset, var_name: str, year: int, month: int, out_dir
     t_start = f"{year}-{month:02d}-01"
     t_end = f"{year}-{month:02d}-{last_day}"
 
+    from dask.diagnostics import ProgressBar
+
     for attempt in range(MAX_RETRIES):
         try:
             chunk = ds[var_name].sel(time=slice(t_start, t_end))
-            data = chunk.compute()
+            with ProgressBar(minimum=2.0, dt=5.0):
+                data = chunk.compute()
             data.to_netcdf(tmp_file)
             tmp_file.rename(out_file)
             return True

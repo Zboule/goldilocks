@@ -1,20 +1,15 @@
 export function indexToLonLat(
   index: number,
   gridWidth: number,
-  gridHeight: number,
-  lonRange: [number, number],
-  latRange: [number, number],
+  lonStart: number,
+  latStart: number,
+  resolution: number,
 ): { lon: number; lat: number } {
   const latIdx = Math.floor(index / gridWidth);
   const lonIdx = index % gridWidth;
-
-  const lonStep = (lonRange[1] - lonRange[0]) / (gridWidth - 1);
-  const latStep = (latRange[1] - latRange[0]) / (gridHeight - 1);
-
-  let lon = lonRange[0] + lonIdx * lonStep;
+  let lon = lonStart + lonIdx * resolution;
   if (lon > 180) lon -= 360;
-  const lat = latRange[0] + latIdx * latStep;
-
+  const lat = latStart - latIdx * resolution;
   return { lon, lat };
 }
 
@@ -22,15 +17,13 @@ export function lonLatToIndex(
   lon: number,
   lat: number,
   gridWidth: number,
-  gridHeight: number,
-  lonRange: [number, number],
-  latRange: [number, number],
+  lonStart: number,
+  latStart: number,
+  resolution: number,
 ): number {
   if (lon < 0) lon += 360;
-  const lonStep = (lonRange[1] - lonRange[0]) / (gridWidth - 1);
-  const latStep = (latRange[1] - latRange[0]) / (gridHeight - 1);
-  const lonIdx = Math.round((lon - lonRange[0]) / lonStep);
-  const latIdx = Math.round((lat - latRange[0]) / latStep);
+  const lonIdx = Math.round((lon - lonStart) / resolution);
+  const latIdx = Math.round((latStart - lat) / resolution);
   return latIdx * gridWidth + lonIdx;
 }
 

@@ -1,23 +1,27 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useManifest } from "./hooks/useManifest";
 import { useFilters } from "./hooks/useFilters";
-import { useFilteredGrid } from "./hooks/useFilteredGrid";
+import { useStaticGrid } from "./hooks/useStaticGrid";
+import { useColorBuffer } from "./hooks/useColorBuffer";
 import { usePreloadPeriod } from "./hooks/usePreloadPeriod";
 import { useHoveredCell } from "./hooks/useHoveredCell";
 import { setManifest } from "./lib/tileCache";
+
 import ControlBar from "./components/controls/ControlBar";
 import FilterSidebar from "./components/controls/FilterSidebar";
-import MapView from "./components/MapView";
+import MapView, { type MapViewHandle } from "./components/MapView";
 import CellTooltip from "./components/CellTooltip";
 import ColorLegend from "./components/ColorLegend";
 
 export default function App() {
   const { manifest, loading: manifestLoading } = useManifest();
+  const mapRef = useRef<MapViewHandle>(null);
 
   const [displayVariable, setDisplayVariable] = useState("temperature_day");
   const [displayStat, setDisplayStat] = useState("mean");
   const [period, setPeriod] = useState<number | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
     if (manifest) {
@@ -28,16 +32,37 @@ export default function App() {
     }
   }, [manifest, period]);
 
+  const handlePeriodChange = useCallback((p: number) => {
+    setPeriod(p);
+  }, []);
+
   const { filters, addFilter, removeFilter, updateFilter, clearFilters, loadPreset } =
     useFilters();
 
-  const { cells, loading: gridLoading } = useFilteredGrid(
+  const staticCells = useStaticGrid(manifest);
+
+  const { colors, version, loading: colorsLoading } = useColorBuffer(
     manifest,
+    staticCells,
     displayVariable,
     displayStat,
     filters,
     period ?? 0,
   );
+
+  // Send static polygons once when ready
+  useEffect(() => {
+    if (mapReady && mapRef.current && staticCells) {
+      mapRef.current.setPolygons(staticCells);
+    }
+  }, [mapReady, staticCells]);
+
+  // Update colors imperatively whenever they change
+  useEffect(() => {
+    if (mapRef.current && colors && staticCells) {
+      mapRef.current.updateColors(colors, version);
+    }
+  }, [colors, version, staticCells]);
 
   usePreloadPeriod(period ?? 0, manifest, displayVariable, displayStat, filters);
 
@@ -68,7 +93,7 @@ export default function App() {
         filterCount={filters.length}
         onDisplayVariableChange={setDisplayVariable}
         onDisplayStatChange={setDisplayStat}
-        onPeriodChange={setPeriod}
+        onPeriodChange={handlePeriodChange}
         onToggleFilters={() => setSidebarOpen((v) => !v)}
       />
 
@@ -87,9 +112,9 @@ export default function App() {
 
         <div className="flex-1 relative min-w-0">
           <MapView
-            cells={cells}
-            resolution={manifest.grid.resolution_deg}
+            ref={mapRef}
             onHover={onCellHover}
+            onReady={() => setMapReady(true)}
           />
 
           <CellTooltip hoveredCell={hoveredCell} />
@@ -102,7 +127,7 @@ export default function App() {
             filterCount={filters.length}
           />
 
-          {gridLoading && (
+          {colorsLoading && (
             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 rounded bg-black/60 px-3 py-1 text-sm text-white">
               Loading...
             </div>

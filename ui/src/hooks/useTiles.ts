@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import type { TileRequest } from "../types";
-import { fetchTile, getCached } from "../lib/tileCache";
+import { fetchTile, getCached, getManifestVersion } from "../lib/tileCache";
 
-export function useTiles(requests: TileRequest[], period: number) {
+export function useTiles(requests: TileRequest[], period: number, manifestReady = false) {
   const [tiles, setTiles] = useState<Map<string, Float32Array>>(new Map());
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const versionRef = useRef(0);
 
   useEffect(() => {
@@ -51,7 +51,7 @@ export function useTiles(requests: TileRequest[], period: number) {
       setTiles(merged);
       setLoading(false);
     });
-  }, [requests, period]);
+  }, [requests, period, manifestReady]);
 
   return { tiles, loading, allLoaded: !loading };
 }

@@ -1,3 +1,5 @@
+import Select from "./Select";
+
 const STAT_LABELS: Record<string, string> = {
   mean: "Mean",
   median: "Median",
@@ -15,15 +17,7 @@ interface Props {
 }
 
 export default function StatSelect({ value, onChange, stats, className }: Props) {
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={`rounded border border-gray-300 bg-white px-2 py-1 text-sm ${className ?? ""}`}
-    >
-      {stats.map((s) => (
-        <option key={s} value={s}>{STAT_LABELS[s] ?? s}</option>
-      ))}
-    </select>
-  );
+  const options = stats.map((s) => ({ value: s, label: STAT_LABELS[s] ?? s }));
+
+  return <Select value={value} onChange={onChange} options={options} className={className} />;
 }

@@ -34,12 +34,19 @@ export function useHoveredCell(
         return;
       }
 
-      const { width, height } = manifest.grid;
+      const { width, resolution_deg } = manifest.grid;
+      const [lonStart] = manifest.lon_range;
+      const [latStart] = manifest.lat_range;
       const { lon, lat } = indexToLonLat(
-        info.index, width, height, manifest.lon_range, manifest.lat_range,
+        info.index, width, lonStart, latStart, resolution_deg,
       );
 
-      // Collect variables to show: display var + filter vars (deduplicated)
+      const displayValue = getCachedValue(displayVariable, "mean", period, info.index);
+      if (displayValue === null) {
+        setHoveredCell(null);
+        return;
+      }
+
       const varsToShow = new Set<string>([displayVariable]);
       for (const f of filters) {
         varsToShow.add(f.variable);

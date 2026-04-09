@@ -1,4 +1,5 @@
 import type { Manifest } from "../../types";
+import Select from "./Select";
 
 interface Props {
   value: string;
@@ -8,15 +9,10 @@ interface Props {
 }
 
 export default function VariableSelect({ value, onChange, manifest, className }: Props) {
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={`rounded border border-gray-300 bg-white px-2 py-1 text-sm ${className ?? ""}`}
-    >
-      {Object.entries(manifest.variables).map(([key, info]) => (
-        <option key={key} value={key}>{info.label}</option>
-      ))}
-    </select>
-  );
+  const options = Object.entries(manifest.variables).map(([key, info]) => ({
+    value: key,
+    label: info.label,
+  }));
+
+  return <Select value={value} onChange={onChange} options={options} className={className} />;
 }

@@ -9,7 +9,7 @@ export function useManifest() {
 
   useEffect(() => {
     if (cached) return;
-    fetch("/tiles/manifest.json")
+    fetch(`${import.meta.env.BASE_URL}tiles/manifest.json`)
       .then((r) => r.json())
       .then((m: Manifest) => {
         cached = m;
