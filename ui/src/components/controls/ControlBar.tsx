@@ -27,6 +27,14 @@ export default function ControlBar({
 }: Props) {
   return (
     <div className="shrink-0 bg-white border-b border-gray-200 px-4 pt-4 pb-5 flex items-center gap-4 z-10">
+      <img
+        src={`${import.meta.env.BASE_URL}goldilocks.svg`}
+        alt="Goldilocks"
+        className="h-8 w-8 shrink-0"
+      />
+
+      <div className="h-5 w-px bg-gray-300" />
+
       <button
         onClick={onToggleFilters}
         className="shrink-0 flex items-center gap-1.5 rounded border border-gray-300 bg-white hover:bg-gray-50 px-2.5 py-1 text-sm transition-colors"
