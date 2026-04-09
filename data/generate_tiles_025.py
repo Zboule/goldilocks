@@ -88,7 +88,7 @@ def load_land_mask() -> np.ndarray:
     mask = mask_raw.values
     if mask.shape == (GRID_WIDTH, GRID_HEIGHT):
         mask = mask.T
-    return mask > 0
+    return mask > 0.01
 
 
 def encode_uint8(values: np.ndarray, enc_min: float, enc_max: float) -> np.ndarray:
