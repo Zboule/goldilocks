@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO="Zboule/goldilocks"
-TAG="v2.2.0"
+TAG="v2.2.1"
 TILES_DIR="data/tiles"
 SYMLINK="ui/public/tiles"
 

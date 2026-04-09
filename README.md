@@ -21,8 +21,8 @@ If you prefer to set things up step by step:
 
 ```bash
 # 1. Download and extract pre-built tiles
-gh release download v2.2.0 --repo Zboule/goldilocks --pattern "tiles-*.tar.gz" --dir /tmp
-tar -xzf /tmp/tiles-v2.2.0.tar.gz -C data/
+gh release download v2.2.1 --repo Zboule/goldilocks --pattern "tiles-*.tar.gz" --dir /tmp
+tar -xzf /tmp/tiles-v2.2.1.tar.gz -C data/
 
 # 2. Ensure the UI symlink exists
 ln -s ../../data/tiles ui/public/tiles
@@ -59,9 +59,9 @@ python -m venv .venv && .venv/bin/pip install -r data/requirements.txt
 After regenerating tiles, create a new release:
 
 ```bash
-tar -czf tiles-v2.2.0.tar.gz -C data tiles/
-gh release create v2.2.0 tiles-v2.2.0.tar.gz --repo Zboule/goldilocks \
-  --title "v2.2.0 – 0.25° 36-period uint16 tiles" \
+tar -czf tiles-v2.2.1.tar.gz -C data tiles/
+gh release create v2.2.1 tiles-v2.2.1.tar.gz --repo Zboule/goldilocks \
+  --title "v2.2.1 – 0.25° 36-period uint16 tiles" \
   --notes "0.25° resolution, 36 periods, uint16 encoded"
 ```
 
