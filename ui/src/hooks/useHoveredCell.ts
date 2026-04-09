@@ -34,11 +34,9 @@ export function useHoveredCell(
         return;
       }
 
-      const { width, resolution_deg } = manifest.grid;
-      const [lonStart] = manifest.lon_range;
-      const [latStart] = manifest.lat_range;
+      const { width, height } = manifest.grid;
       const { lon, lat } = indexToLonLat(
-        info.index, width, lonStart, latStart, resolution_deg,
+        info.index, width, height, manifest.lon_range, manifest.lat_range,
       );
 
       // Collect variables to show: display var + filter vars (deduplicated)

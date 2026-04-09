@@ -4,3 +4,4 @@ data/processed
 node_modules
 .venv
 logs/
+*.tar.gz

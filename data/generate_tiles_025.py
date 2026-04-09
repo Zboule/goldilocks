@@ -131,7 +131,7 @@ def main():
     manifest = {
         "grid": {"width": GRID_WIDTH, "height": GRID_HEIGHT, "resolution_deg": RESOLUTION_DEG},
         "lon_range": [0.0, 359.75],
-        "lat_range": [-90.0, 90.0],
+        "lat_range": [90.0, -90.0],
         "periods": [],
         "period_labels": [],
         "stats": STATS,

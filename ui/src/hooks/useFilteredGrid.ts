@@ -33,8 +33,6 @@ export function useFilteredGrid(
     if (!displayTile) return [];
 
     const { width, height, resolution_deg } = manifest.grid;
-    const [lonStart] = manifest.lon_range;
-    const [latStart] = manifest.lat_range;
     const varInfo = manifest.variables[displayVariable];
     const totalCells = width * height;
     const result: GridCell[] = [];
@@ -64,7 +62,7 @@ export function useFilteredGrid(
       }
 
       const { lon, lat } = indexToLonLat(
-        i, width, lonStart, latStart, resolution_deg,
+        i, width, height, manifest.lon_range, manifest.lat_range,
       );
 
       const half = resolution_deg / 2;
