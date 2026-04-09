@@ -17,7 +17,8 @@ export interface Manifest {
   period_labels: string[];
   stats: string[];
   variables: Record<string, VariableInfo>;
-  encoding?: "float32" | "uint16";
+  encoding?: "float32" | "uint16" | "uint8-land-only";
+  land_cells?: number;
 }
 
 export interface Filter {

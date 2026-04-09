@@ -42,36 +42,46 @@ export default function CellTooltip({ hoveredCell }: Props) {
         {formatLat(lat)}, {formatLon(lon)}
       </div>
 
-      {data.map((varData) => (
-        <div key={varData.variable} className="mb-1.5">
-          <div className="font-medium text-gray-600">
-            {varData.label}{" "}
-            <span className="text-gray-400 font-normal">({varData.units})</span>
-          </div>
-          <div className="grid grid-cols-6 gap-x-1 mt-0.5">
-            {STAT_ORDER.map((stat) => {
-              const filterKey = `${varData.variable}/${stat}`;
-              const filter = filterMap.get(filterKey);
-              let cellClass = "text-gray-500";
-              if (filter) {
-                cellClass = filter.passes
-                  ? "text-green-600 font-semibold"
-                  : "text-red-400";
-              }
-              return (
-                <div key={stat} className="text-center">
-                  <div className="text-[10px] text-gray-400">
-                    {STAT_LABELS[stat]}
+      {data.map((varData) => {
+        const availableStats = STAT_ORDER.filter(
+          (s) => varData.stats[s] !== null && varData.stats[s] !== undefined,
+        );
+        if (availableStats.length === 0) return null;
+
+        return (
+          <div key={varData.variable} className="mb-1.5">
+            <div className="font-medium text-gray-600">
+              {varData.label}{" "}
+              <span className="text-gray-400 font-normal">({varData.units})</span>
+            </div>
+            <div
+              className="grid gap-x-1 mt-0.5"
+              style={{ gridTemplateColumns: `repeat(${availableStats.length}, 1fr)` }}
+            >
+              {availableStats.map((stat) => {
+                const filterKey = `${varData.variable}/${stat}`;
+                const filter = filterMap.get(filterKey);
+                let cellClass = "text-gray-500";
+                if (filter) {
+                  cellClass = filter.passes
+                    ? "text-green-600 font-semibold"
+                    : "text-red-400";
+                }
+                return (
+                  <div key={stat} className="text-center">
+                    <div className="text-[10px] text-gray-400">
+                      {STAT_LABELS[stat]}
+                    </div>
+                    <div className={`tabular-nums ${cellClass}`}>
+                      {formatValue(varData.stats[stat])}
+                    </div>
                   </div>
-                  <div className={`tabular-nums ${cellClass}`}>
-                    {formatValue(varData.stats[stat])}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

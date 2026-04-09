@@ -39,7 +39,7 @@ export default function App() {
     period ?? 0,
   );
 
-  usePreloadPeriod(period ?? 0, manifest, displayVariable, filters);
+  usePreloadPeriod(period ?? 0, manifest, displayVariable, displayStat, filters);
 
   const { hoveredCell, onCellHover } = useHoveredCell(
     manifest,

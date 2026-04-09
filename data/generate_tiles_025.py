@@ -1,18 +1,22 @@
 """
-Generate uint16 quantized binary tiles from period NetCDF files for the web viewer.
+Generate uint8 land-only binary tiles from period NetCDF files for the web viewer.
 
-Encoding: each value is mapped to uint16 [1, 65535] using per-variable min/max.
-  - 0 = NaN sentinel (ocean / no-data)
-  - Client decodes: value = encode_min + ((uint16 - 1) / 65534) * (encode_max - encode_min)
+Format:
+  - Each .bin is a flat Uint8Array of length land_cells (~352K), not the full grid (1M)
+  - land_index.bin maps each land cell to its position in the full grid (Uint32Array)
+  - Encoding: 0=NaN, 1-255=value mapped to [encode_min, encode_max]
+  - Client decodes: value = encode_min + ((uint8 - 1) / 254) * (encode_max - encode_min)
 
-Reads:  data/processed/*_periods.nc  (36 periods × lat × lon, 6 stats)
-        Land/sea mask downloaded from WeatherBench2 Zarr on first run
+Tile size: ~344 KB raw, ~100 KB gzipped (vs 2 MB raw / 475 KB gzipped before)
+Total dataset: ~78 MB gzipped (core stats) vs ~736 MB before
 
-Writes: data/tiles/{variable}/{stat}/period{NN}.bin  (721×1440 Uint16, ocean=0)
+Reads:  data/processed/*_periods.nc
+        Land/sea mask from WeatherBench2 Zarr
+
+Writes: data/tiles/{variable}/{stat}/period{NN}.bin  (Uint8, land-only)
+        data/tiles/land_index.bin                     (Uint32, grid indices of land cells)
+        data/tiles/land_mask.bin                      (Float32, full grid, for legacy compat)
         data/tiles/manifest.json
-        data/tiles/land_mask.bin  (721×1440 Float32, kept as float for client compat)
-
-Tile size: ~2 MB raw (vs 4 MB float32), ~300-500 KB gzipped.
 """
 
 import xarray as xr
@@ -50,23 +54,18 @@ def download_land_mask():
         return
 
     print(f"  Downloading land/sea mask from WeatherBench2 Zarr...")
-    ds = xr.open_zarr(
-        ZARR_URL,
-        chunks=None,
-        storage_options={"token": "anon"},
-    )
+    ds = xr.open_zarr(ZARR_URL, chunks=None, storage_options={"token": "anon"})
 
-    if "land_sea_mask" in ds:
-        mask = ds["land_sea_mask"]
-    elif "lsm" in ds:
-        mask = ds["lsm"]
+    for name in ["land_sea_mask", "lsm"]:
+        if name in ds:
+            mask = ds[name]
+            break
     else:
-        available = [v for v in ds.data_vars if "land" in v.lower() or "mask" in v.lower() or "lsm" in v.lower()]
+        available = [v for v in ds.data_vars if "land" in v.lower() or "mask" in v.lower()]
         if available:
             mask = ds[available[0]]
-            print(f"  Using variable: {available[0]}")
         else:
-            print(f"  WARNING: No land/sea mask found. Available vars: {list(ds.data_vars)[:20]}")
+            print(f"  WARNING: No land/sea mask found.")
             ds.close()
             return
 
@@ -77,73 +76,57 @@ def download_land_mask():
     mask.load()
     mask.to_netcdf(LAND_MASK_PATH)
     ds.close()
-    print(f"  Saved land mask: {LAND_MASK_PATH} ({LAND_MASK_PATH.stat().st_size / 1e6:.1f} MB)")
+    print(f"  Saved: {LAND_MASK_PATH}")
 
 
 def load_land_mask() -> np.ndarray:
-    """Load land/sea mask as (lat=721, lon=1440) boolean array."""
+    """Returns boolean mask (lat=721, lon=1440), True=land."""
     if not LAND_MASK_PATH.exists():
-        print("  No land mask available — skipping ocean masking.")
         return None
 
     mask_raw = xr.open_dataarray(LAND_MASK_PATH)
     mask = mask_raw.values
-
     if mask.shape == (GRID_WIDTH, GRID_HEIGHT):
-        # Shape is (lon, lat) — transpose to (lat, lon)
         mask = mask.T
-    elif mask.shape == (GRID_HEIGHT, GRID_WIDTH):
-        pass  # Already (lat, lon)
-    else:
-        # Try to figure it out from dims
-        dims = list(mask_raw.dims)
-        if len(dims) == 2 and dims[0] in ("longitude", "lon"):
-            mask = mask.T
-
-    print(f"  Land mask loaded: {mask.shape} (expect {GRID_HEIGHT}×{GRID_WIDTH})")
     return mask >= 0.5
 
 
-def encode_uint16(grid: np.ndarray, enc_min: float, enc_max: float) -> np.ndarray:
-    """Quantize float grid to uint16. NaN → 0, valid → [1, 65535]."""
-    out = np.zeros(grid.shape, dtype=np.uint16)
-    valid = ~np.isnan(grid)
+def encode_uint8(values: np.ndarray, enc_min: float, enc_max: float) -> np.ndarray:
+    """Quantize float values to uint8 [1,255]. Input should be land-only (no NaN)."""
     if enc_max == enc_min:
-        out[valid] = 32768
-    else:
-        normalized = (grid[valid] - enc_min) / (enc_max - enc_min)
-        normalized = np.clip(normalized, 0.0, 1.0)
-        out[valid] = (normalized * 65534 + 1).astype(np.uint16)
-    return out
-
-
-def write_bin(data_2d: np.ndarray, path: Path):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    data_2d.tofile(path)
+        return np.full(values.shape, 128, dtype=np.uint8)
+    normalized = np.clip((values - enc_min) / (enc_max - enc_min), 0.0, 1.0)
+    return (normalized * 254 + 1).astype(np.uint8)
 
 
 def main():
     t0 = time.time()
     print("=" * 60)
-    print("  Binary Tile Generator (0.25°, 36 periods, uint16)")
-    print(f"  Input:  {PROCESSED_DIR}")
-    print(f"  Output: {TILES_DIR}")
-    print(f"  Grid:   {GRID_WIDTH}×{GRID_HEIGHT} ({RESOLUTION_DEG}°)")
-    print(f"  Encoding: uint16 (0=NaN, 1-65535=value range)")
+    print("  Tile Generator (0.25°, 36 periods, uint8 land-only)")
+    print(f"  Grid: {GRID_WIDTH}x{GRID_HEIGHT} ({RESOLUTION_DEG}°)")
     print("=" * 60)
 
     download_land_mask()
     land_mask = load_land_mask()
+    if land_mask is None:
+        print("FATAL: No land mask available.")
+        return
+
+    print(f"  Land mask: {land_mask.shape}, land={land_mask.sum():,} / {land_mask.size:,}")
+
+    # Build land index: flat indices of land cells in the full (lat, lon) grid
+    land_index = np.where(land_mask.ravel())[0].astype(np.uint32)
+    n_land = len(land_index)
+    print(f"  Land cells: {n_land:,}")
 
     TILES_DIR.mkdir(parents=True, exist_ok=True)
 
-    if land_mask is not None:
-        print(f"\nLand mask: {land_mask.shape}, land cells: {land_mask.sum()}/{land_mask.size}")
-        mask_float = land_mask.astype(np.float32)
-        write_bin(mask_float, TILES_DIR / "land_mask.bin")
-        print(f"Saved land_mask.bin ({(TILES_DIR / 'land_mask.bin').stat().st_size / 1024:.0f} KB)")
-    else:
-        print("\nNo land mask — all cells will have values.")
+    # Write land_index.bin (Uint32Array)
+    land_index.tofile(TILES_DIR / "land_index.bin")
+    print(f"  Saved land_index.bin ({(TILES_DIR / 'land_index.bin').stat().st_size / 1024:.0f} KB)")
+
+    # Write land_mask.bin (Float32, full grid) for legacy compat
+    land_mask.astype(np.float32).tofile(TILES_DIR / "land_mask.bin")
 
     manifest = {
         "grid": {"width": GRID_WIDTH, "height": GRID_HEIGHT, "resolution_deg": RESOLUTION_DEG},
@@ -152,7 +135,8 @@ def main():
         "periods": [],
         "period_labels": [],
         "stats": STATS,
-        "encoding": "uint16",
+        "encoding": "uint8-land-only",
+        "land_cells": n_land,
         "variables": {},
     }
 
@@ -169,29 +153,26 @@ def main():
             if "period_label" in ds:
                 manifest["period_labels"] = ds["period_label"].values.tolist()
 
-        # First pass: find global min/max across all stats and periods
+        # First pass: find global min/max across all stats and periods (land only)
         var_global_min = float("inf")
         var_global_max = float("-inf")
-        mean_values_for_range: list[float] = []
+        mean_values_for_range = []
 
         for stat in STATS:
-            stat_data = ds[stat].values
+            stat_data = ds[stat].values  # (period, lat/lon...)
 
             for pi in range(len(periods)):
                 grid = stat_data[pi].copy()
-                if grid.ndim == 2 and grid.shape[0] != GRID_HEIGHT:
+                if grid.shape[0] != GRID_HEIGHT:
                     grid = grid.T
-                if land_mask is not None:
-                    grid[~land_mask] = np.nan
-
-                valid = grid[~np.isnan(grid)]
+                land_vals = grid.ravel()[land_index]
+                valid = land_vals[~np.isnan(land_vals)]
                 if len(valid) > 0:
                     var_global_min = min(var_global_min, float(valid.min()))
                     var_global_max = max(var_global_max, float(valid.max()))
                     if stat == "mean":
                         mean_values_for_range.extend(valid.tolist())
 
-        # Add 1% padding to encoding range to avoid clipping edge values
         enc_range = var_global_max - var_global_min
         enc_min = var_global_min - enc_range * 0.01
         enc_max = var_global_max + enc_range * 0.01
@@ -200,20 +181,23 @@ def main():
         display_min = float(np.percentile(all_means, 2))
         display_max = float(np.percentile(all_means, 98))
 
-        # Second pass: encode and write tiles
+        # Second pass: encode and write land-only uint8 tiles
         for stat in STATS:
             stat_data = ds[stat].values
 
             for pi, period_num in enumerate(periods):
                 grid = stat_data[pi].copy()
-                if grid.ndim == 2 and grid.shape[0] != GRID_HEIGHT:
+                if grid.shape[0] != GRID_HEIGHT:
                     grid = grid.T
-                if land_mask is not None:
-                    grid[~land_mask] = np.nan
 
-                encoded = encode_uint16(grid, enc_min, enc_max)
+                land_vals = grid.ravel()[land_index]
+                nan_mask = np.isnan(land_vals)
+                encoded = encode_uint8(np.nan_to_num(land_vals, nan=enc_min), enc_min, enc_max)
+                encoded[nan_mask] = 0
+
                 out_path = TILES_DIR / var_name / stat / f"period{period_num:02d}.bin"
-                write_bin(encoded, out_path)
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                encoded.tofile(out_path)
                 total_files += 1
 
         manifest["variables"][var_name] = {
@@ -227,20 +211,22 @@ def main():
             "encode_max": round(enc_max, 4),
         }
 
-        print(f"    {var_name}: {len(STATS) * len(periods)} tiles, range=[{var_global_min:.2f}, {var_global_max:.2f}], encode=[{enc_min:.2f}, {enc_max:.2f}] {var_cfg['units']}")
+        print(f"    {var_name}: {len(STATS) * len(periods)} tiles, "
+              f"range=[{var_global_min:.2f}, {var_global_max:.2f}], "
+              f"encode=[{enc_min:.2f}, {enc_max:.2f}] {var_cfg['units']}")
         ds.close()
 
     manifest_path = TILES_DIR / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2))
-    print(f"\nSaved manifest.json")
 
     total_size = sum(f.stat().st_size for f in TILES_DIR.rglob("*.bin"))
     elapsed = time.time() - t0
 
     print(f"\n{'=' * 60}")
     print(f"  Done in {elapsed:.0f}s")
-    print(f"  Total: {total_files} .bin files + manifest.json + land_mask.bin")
-    print(f"  Size:  {total_size / 1e6:.1f} MB ({total_size / total_files / 1024:.0f} KB avg per tile)")
+    print(f"  Total: {total_files} tiles + land_index.bin + manifest.json")
+    print(f"  Size:  {total_size / 1e6:.1f} MB ({total_size / total_files / 1024:.0f} KB avg/tile)")
+    print(f"  Land cells: {n_land:,} ({n_land * 1 / 1024:.0f} KB per tile)")
     print("=" * 60)
 
 
