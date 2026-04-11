@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type { Manifest, Filter, HoveredCell, CellStats } from "../types";
 import { getCachedValue } from "../lib/tileCache";
 import { evaluateFilter, describeFilter } from "../lib/filterEngine";
@@ -44,9 +44,11 @@ export function useHoveredCell(
   filters: Filter[],
 ) {
   const [hoveredCell, setHoveredCell] = useState<HoveredCell | null>(null);
+  const lastInfoRef = useRef<HoverInput | null>(null);
 
-  const onCellHover = useCallback(
+  const updateCell = useCallback(
     (info: HoverInput | null) => {
+      lastInfoRef.current = info;
       if (!info || !manifest || periods.length === 0) {
         setHoveredCell(null);
         return;
@@ -117,6 +119,19 @@ export function useHoveredCell(
     },
     [manifest, periods, displayVariable, filters],
   );
+
+  const onCellHover = useCallback(
+    (info: HoverInput | null) => {
+      updateCell(info);
+    },
+    [updateCell],
+  );
+
+  useEffect(() => {
+    if (lastInfoRef.current) {
+      updateCell(lastInfoRef.current);
+    }
+  }, [updateCell]);
 
   return { hoveredCell, onCellHover };
 }
