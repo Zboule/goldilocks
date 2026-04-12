@@ -13,6 +13,24 @@ const STAT_LABELS: Record<string, string> = {
   p90: "P90",
 };
 
+function aggregateStat(stat: string, values: number[]): number | null {
+  const valid = values.filter((v) => v !== null && !Number.isNaN(v)) as number[];
+  if (valid.length === 0) return null;
+  if (valid.length === 1) return valid[0];
+  switch (stat) {
+    case "max":
+    case "p90":
+      return Math.max(...valid);
+    case "min":
+    case "p10":
+      return Math.min(...valid);
+    case "mean":
+    case "median":
+    default:
+      return valid.reduce((a, b) => a + b, 0) / valid.length;
+  }
+}
+
 interface HoverInput {
   index: number;
   x: number;
@@ -21,7 +39,7 @@ interface HoverInput {
 
 export function useHoveredCell(
   manifest: Manifest | null,
-  period: number,
+  periods: number[],
   displayVariable: string,
   filters: Filter[],
 ) {
@@ -29,7 +47,7 @@ export function useHoveredCell(
 
   const onCellHover = useCallback(
     (info: HoverInput | null) => {
-      if (!info || !manifest) {
+      if (!info || !manifest || periods.length === 0) {
         setHoveredCell(null);
         return;
       }
@@ -41,8 +59,9 @@ export function useHoveredCell(
         info.index, width, lonStart, latStart, resolution_deg,
       );
 
-      const displayValue = getCachedValue(displayVariable, "mean", period, info.index);
-      if (displayValue === null) {
+      // Check if there's any data at this cell
+      const firstValue = getCachedValue(displayVariable, "mean", periods[0], info.index);
+      if (firstValue === null) {
         setHoveredCell(null);
         return;
       }
@@ -58,7 +77,8 @@ export function useHoveredCell(
         if (!varInfo) continue;
         const stats: Record<string, number | null> = {};
         for (const stat of manifest.stats) {
-          stats[stat] = getCachedValue(varKey, stat, period, info.index);
+          const perPeriod = periods.map((p) => getCachedValue(varKey, stat, p, info.index));
+          stats[stat] = aggregateStat(stat, perPeriod as number[]);
         }
         data.push({
           variable: varKey,
@@ -69,8 +89,12 @@ export function useHoveredCell(
       }
 
       const filterResults = filters.map((f) => {
-        const value = getCachedValue(f.variable, f.stat, period, info.index);
-        const passes = evaluateFilter(f, value);
+        // Filter passes only if ALL periods pass
+        let allPass = true;
+        for (const p of periods) {
+          const value = getCachedValue(f.variable, f.stat, p, info.index);
+          if (!evaluateFilter(f, value)) { allPass = false; break; }
+        }
         const varInfo = manifest.variables[f.variable];
         const label = describeFilter(
           f,
@@ -78,7 +102,7 @@ export function useHoveredCell(
           STAT_LABELS[f.stat] ?? f.stat,
           varInfo?.units ?? "",
         );
-        return { filterId: f.id, variable: f.variable, stat: f.stat, label, passes };
+        return { filterId: f.id, variable: f.variable, stat: f.stat, label, passes: allPass };
       });
 
       setHoveredCell({
@@ -91,7 +115,7 @@ export function useHoveredCell(
         filterResults,
       });
     },
-    [manifest, period, displayVariable, filters],
+    [manifest, periods, displayVariable, filters],
   );
 
   return { hoveredCell, onCellHover };

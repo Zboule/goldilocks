@@ -6,11 +6,14 @@ interface Props {
   manifest: Manifest;
   displayVariable: string;
   displayStat: string;
-  period: number;
+  selectedPeriods: number[];
+  lockedPeriods: Set<number>;
+  activePeriod: number | null;
   filterCount: number;
   onDisplayVariableChange: (v: string) => void;
   onDisplayStatChange: (s: string) => void;
-  onPeriodChange: (p: number) => void;
+  onClickPeriod: (p: number) => void;
+  onSetActivePeriod: (p: number) => void;
   onToggleFilters: () => void;
 }
 
@@ -18,11 +21,14 @@ export default function ControlBar({
   manifest,
   displayVariable,
   displayStat,
-  period,
+  selectedPeriods,
+  lockedPeriods,
+  activePeriod,
   filterCount,
   onDisplayVariableChange,
   onDisplayStatChange,
-  onPeriodChange,
+  onClickPeriod,
+  onSetActivePeriod,
   onToggleFilters,
 }: Props) {
   return (
@@ -74,10 +80,13 @@ export default function ControlBar({
       <div className="h-5 w-px bg-gray-300" />
 
       <PeriodSlider
-        period={period}
+        selectedPeriods={selectedPeriods}
+        lockedPeriods={lockedPeriods}
+        activePeriod={activePeriod}
         periods={manifest.periods}
         periodLabels={manifest.period_labels}
-        onChange={onPeriodChange}
+        onClickPeriod={onClickPeriod}
+        onSetActive={onSetActivePeriod}
       />
     </div>
   );

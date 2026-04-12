@@ -4,45 +4,37 @@ import { fetchTile } from "../lib/tileCache";
 
 const CORE_STATS = ["mean", "p10", "p90"];
 
-export function usePreloadPeriod(
-  period: number,
+export function usePreloadPeriods(
+  selectedPeriods: number[],
   manifest: Manifest | null,
   displayVariable: string,
   displayStat: string,
   filters: Filter[],
 ) {
   useEffect(() => {
-    if (!manifest) return;
+    if (!manifest || selectedPeriods.length === 0) return;
 
-    const periods = manifest.periods;
-    const idx = periods.indexOf(period);
-    const adjacent = [
-      idx > 0 ? periods[idx - 1] : null,
-      idx < periods.length - 1 ? periods[idx + 1] : null,
-    ].filter((p): p is number => p !== null);
+    const allPeriods = manifest.periods;
+    const adjacentSet = new Set<number>();
 
-    // Core stats for display variable (for tooltip)
-    for (const stat of CORE_STATS) {
-      fetchTile(displayVariable, stat, period);
-      for (const adj of adjacent) {
-        fetchTile(displayVariable, stat, adj);
-      }
+    for (const p of selectedPeriods) {
+      const idx = allPeriods.indexOf(p);
+      if (idx > 0) adjacentSet.add(allPeriods[idx - 1]);
+      if (idx < allPeriods.length - 1) adjacentSet.add(allPeriods[idx + 1]);
     }
 
-    // If display stat is non-core, load it too
-    if (!CORE_STATS.includes(displayStat)) {
-      fetchTile(displayVariable, displayStat, period);
-      for (const adj of adjacent) {
-        fetchTile(displayVariable, displayStat, adj);
-      }
-    }
+    const periodsToPreload = [...new Set([...selectedPeriods, ...adjacentSet])];
 
-    // Filter tiles for current + adjacent periods
-    for (const f of filters) {
-      fetchTile(f.variable, f.stat, period);
-      for (const adj of adjacent) {
-        fetchTile(f.variable, f.stat, adj);
+    for (const period of periodsToPreload) {
+      for (const stat of CORE_STATS) {
+        fetchTile(displayVariable, stat, period);
+      }
+      if (!CORE_STATS.includes(displayStat)) {
+        fetchTile(displayVariable, displayStat, period);
+      }
+      for (const f of filters) {
+        fetchTile(f.variable, f.stat, period);
       }
     }
-  }, [period, manifest, displayVariable, displayStat, filters]);
+  }, [selectedPeriods, manifest, displayVariable, displayStat, filters]);
 }

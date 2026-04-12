@@ -1,9 +1,30 @@
 import { useMemo, useRef } from "react";
 import type { Manifest, Filter, TileRequest } from "../types";
-import { useTiles } from "./useTiles";
+import { useMultiPeriodTiles } from "./useMultiPeriodTiles";
 import { getFilterTileRequests } from "../lib/filterEngine";
 import { getColor, GRAY_COLOR } from "../lib/colorScale";
 import type { StaticCell } from "./useStaticGrid";
+
+function aggregateStat(stat: string, values: number[]): number {
+  if (values.length === 0) return NaN;
+  if (values.length === 1) return values[0];
+
+  switch (stat) {
+    case "max":
+    case "p90":
+      return Math.max(...values);
+    case "min":
+    case "p10":
+      return Math.min(...values);
+    case "mean":
+    case "median":
+    default: {
+      let sum = 0;
+      for (const v of values) sum += v;
+      return sum / values.length;
+    }
+  }
+}
 
 export function useColorBuffer(
   manifest: Manifest | null,
@@ -11,7 +32,7 @@ export function useColorBuffer(
   displayVariable: string,
   displayStat: string,
   filters: Filter[],
-  period: number,
+  periods: number[],
 ) {
   const tileRequests = useMemo<TileRequest[]>(() => {
     const filterReqs = getFilterTileRequests(filters);
@@ -25,18 +46,18 @@ export function useColorBuffer(
     return filterReqs;
   }, [filters, displayVariable, displayStat]);
 
-  const { tiles, loading } = useTiles(tileRequests, period, !!manifest);
+  const { tilesPerPeriod, loading } = useMultiPeriodTiles(tileRequests, periods, !!manifest);
 
   const versionRef = useRef(0);
 
   const { colors, version } = useMemo(() => {
-    if (!manifest || !cells || loading || cells.length === 0) {
+    if (!manifest || !cells || loading || cells.length === 0 || periods.length === 0) {
       return { colors: null, version: versionRef.current };
     }
 
-    const t0 = performance.now();
-    const displayTile = tiles.get(`${displayVariable}/${displayStat}`);
-    if (!displayTile || displayTile.length === 0) {
+    const nPeriods = periods.length;
+    const displayTiles = tilesPerPeriod.get(`${displayVariable}/${displayStat}`);
+    if (!displayTiles || displayTiles.length < nPeriods || displayTiles.some((t) => !t || t.length === 0)) {
       return { colors: null, version: versionRef.current };
     }
 
@@ -45,25 +66,37 @@ export function useColorBuffer(
 
     for (let ci = 0; ci < cells.length; ci++) {
       const gridIdx = cells[ci].index;
-      const value = displayTile[gridIdx];
 
-      let allPass = true;
-      if (!Number.isNaN(value)) {
-        for (const f of filters) {
-          const tile = tiles.get(`${f.variable}/${f.stat}`);
-          if (!tile) { allPass = false; break; }
-          const v = tile[gridIdx];
-          if (Number.isNaN(v)) { allPass = false; break; }
-          const passes = f.operator === "<" ? v < f.value : v > f.value;
-          if (!passes) { allPass = false; break; }
-        }
+      // Collect display values across all periods
+      const displayValues: number[] = [];
+      let anyNaN = false;
+      for (let pi = 0; pi < nPeriods; pi++) {
+        const v = displayTiles[pi][gridIdx];
+        if (Number.isNaN(v)) { anyNaN = true; break; }
+        displayValues.push(v);
       }
 
-      const color = Number.isNaN(value)
-        ? [0, 0, 0, 0]
-        : allPass
-          ? getColor(displayVariable, value, varInfo.display_min, varInfo.display_max)
-          : GRAY_COLOR;
+      if (anyNaN || displayValues.length === 0) continue;
+
+      // Check filters: ALL periods must pass ALL filters
+      let allPeriodsPass = true;
+      for (const f of filters) {
+        const filterTiles = tilesPerPeriod.get(`${f.variable}/${f.stat}`);
+        if (!filterTiles || filterTiles.length < nPeriods) { allPeriodsPass = false; break; }
+
+        for (let pi = 0; pi < nPeriods; pi++) {
+          const v = filterTiles[pi]?.[gridIdx];
+          if (v === undefined || Number.isNaN(v)) { allPeriodsPass = false; break; }
+          const passes = f.operator === "<" ? v < f.value : v > f.value;
+          if (!passes) { allPeriodsPass = false; break; }
+        }
+        if (!allPeriodsPass) break;
+      }
+
+      const aggregatedValue = aggregateStat(displayStat, displayValues);
+      const color = allPeriodsPass
+        ? getColor(displayVariable, aggregatedValue, varInfo.display_min, varInfo.display_max)
+        : GRAY_COLOR;
 
       const off = ci * 4;
       buf[off] = color[0];
@@ -74,7 +107,7 @@ export function useColorBuffer(
 
     versionRef.current++;
     return { colors: buf, version: versionRef.current };
-  }, [manifest, cells, tiles, loading, displayVariable, displayStat, filters]);
+  }, [manifest, cells, tilesPerPeriod, loading, displayVariable, displayStat, filters, periods]);
 
   return { colors, version, loading };
 }

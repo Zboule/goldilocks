@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useManifest } from "./hooks/useManifest";
 import { useFilters } from "./hooks/useFilters";
+import { usePeriodSelection } from "./hooks/usePeriodSelection";
 import { useStaticGrid } from "./hooks/useStaticGrid";
 import { useColorBuffer } from "./hooks/useColorBuffer";
-import { usePreloadPeriod } from "./hooks/usePreloadPeriod";
+import { usePreloadPeriods } from "./hooks/usePreloadPeriod";
 import { useHoveredCell } from "./hooks/useHoveredCell";
 import { setManifest } from "./lib/tileCache";
 
@@ -19,22 +20,26 @@ export default function App() {
 
   const [displayVariable, setDisplayVariable] = useState("temperature_day");
   const [displayStat, setDisplayStat] = useState("mean");
-  const [period, setPeriod] = useState<number | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mapReady, setMapReady] = useState(false);
+
+  const {
+    lockedPeriods,
+    activePeriod,
+    selectedPeriods,
+    clickPeriod,
+    setActive,
+    init: initPeriod,
+  } = usePeriodSelection();
 
   useEffect(() => {
     if (manifest) {
       setManifest(manifest);
-      if (manifest.periods.length > 0 && period === null) {
-        setPeriod(manifest.periods[0]);
+      if (manifest.periods.length > 0) {
+        initPeriod(manifest.periods[0]);
       }
     }
-  }, [manifest, period]);
-
-  const handlePeriodChange = useCallback((p: number) => {
-    setPeriod(p);
-  }, []);
+  }, [manifest, initPeriod]);
 
   const { filters, addFilter, removeFilter, updateFilter, clearFilters, loadPreset } =
     useFilters();
@@ -47,33 +52,31 @@ export default function App() {
     displayVariable,
     displayStat,
     filters,
-    period ?? 1,
+    selectedPeriods,
   );
 
-  // Send static polygons once when ready
   useEffect(() => {
     if (mapReady && mapRef.current && staticCells) {
       mapRef.current.setPolygons(staticCells);
     }
   }, [mapReady, staticCells]);
 
-  // Update colors imperatively whenever they change
   useEffect(() => {
     if (mapRef.current && colors && staticCells) {
       mapRef.current.updateColors(colors, version);
     }
   }, [colors, version, staticCells]);
 
-  usePreloadPeriod(period ?? 1, manifest, displayVariable, displayStat, filters);
+  usePreloadPeriods(selectedPeriods, manifest, displayVariable, displayStat, filters);
 
   const { hoveredCell, onCellHover } = useHoveredCell(
     manifest,
-    period ?? 1,
+    selectedPeriods,
     displayVariable,
     filters,
   );
 
-  if (manifestLoading || !manifest || period === null) {
+  if (manifestLoading || !manifest || selectedPeriods.length === 0) {
     return (
       <div className="flex items-center justify-center h-screen text-gray-500">
         Loading...
@@ -89,11 +92,14 @@ export default function App() {
         manifest={manifest}
         displayVariable={displayVariable}
         displayStat={displayStat}
-        period={period}
+        selectedPeriods={selectedPeriods}
+        lockedPeriods={lockedPeriods}
+        activePeriod={activePeriod}
         filterCount={filters.length}
         onDisplayVariableChange={setDisplayVariable}
         onDisplayStatChange={setDisplayStat}
-        onPeriodChange={handlePeriodChange}
+        onClickPeriod={clickPeriod}
+        onSetActivePeriod={setActive}
         onToggleFilters={() => setSidebarOpen((v) => !v)}
       />
 
