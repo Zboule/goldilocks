@@ -12,26 +12,26 @@ export default function ColorLegend({ variable, min, max, units, filterCount }: 
   const gradient = getGradientCSS(variable, min, max);
 
   return (
-    <div className="absolute bottom-6 left-4 z-10 rounded-lg bg-white/90 backdrop-blur-sm px-3 py-2 shadow-md">
-      <div className="text-xs text-gray-500 mb-1">
-        {units}
-        {filterCount > 0 && (
-          <span className="ml-2 text-gray-400">
-            ({filterCount} filter{filterCount > 1 ? "s" : ""} active — gray = excluded)
-          </span>
-        )}
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="text-xs font-mono w-12 text-right">
+    <div className="absolute bottom-4 left-2 md:left-4 z-10 rounded-lg bg-white/70 backdrop-blur-sm px-2.5 md:px-3 py-1.5 shadow-md max-w-[calc(100vw-1rem)]">
+      <div className="flex items-center gap-1.5 md:gap-2">
+        <span className="text-[10px] md:text-xs text-gray-500 shrink-0">
+          {units}
+        </span>
+        <span className="text-[10px] md:text-xs font-mono text-gray-500 shrink-0">
           {min.toFixed(min < 10 ? 1 : 0)}
         </span>
         <div
-          className="h-3 w-48 rounded"
+          className="h-2.5 md:h-3 w-28 md:w-44 rounded shrink-0"
           style={{ background: gradient }}
         />
-        <span className="text-xs font-mono w-12">
+        <span className="text-[10px] md:text-xs font-mono text-gray-500 shrink-0">
           {max.toFixed(max < 10 ? 1 : 0)}
         </span>
+        {filterCount > 0 && (
+          <span className="text-[10px] text-gray-400 shrink-0 hidden sm:inline">
+            · {filterCount} filter{filterCount > 1 ? "s" : ""} (gray = excluded)
+          </span>
+        )}
       </div>
     </div>
   );
