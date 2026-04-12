@@ -19,6 +19,8 @@ export interface Manifest {
   variables: Record<string, VariableInfo>;
   encoding?: "float32" | "uint16" | "uint8-land-only";
   land_cells?: number;
+  chunk_size?: number;
+  variable_order?: string[];
 }
 
 export interface Filter {

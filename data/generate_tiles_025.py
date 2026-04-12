@@ -266,12 +266,16 @@ def main():
         "stats": STATS,
         "encoding": "uint8-land-only",
         "land_cells": n_land,
+        "chunk_size": 1024,
+        "variable_order": list(VARIABLES.keys()),
         "variables": {},
     }
 
     total_files = 0
-
-    for var_name, var_cfg in VARIABLES.items():
+    var_order = list(VARIABLES.keys())
+    cell_data = None
+    
+    for var_idx, (var_name, var_cfg) in enumerate(VARIABLES.items()):
         nc_path = PROCESSED_DIR / var_cfg["file"]
         print(f"\n  {var_name}: reading {nc_path.name}...")
         ds = xr.open_dataset(nc_path)
@@ -281,6 +285,9 @@ def main():
             manifest["periods"] = periods
             if "period_label" in ds:
                 manifest["period_labels"] = ds["period_label"].values.tolist()
+                
+        if cell_data is None:
+            cell_data = np.zeros((n_land, len(var_order), len(STATS), len(periods)), dtype=np.uint8)
 
         # First pass: find global min/max across all stats and periods (land only)
         var_global_min = float("inf")
@@ -323,6 +330,8 @@ def main():
                 nan_mask = np.isnan(land_vals)
                 encoded = encode_uint8(np.nan_to_num(land_vals, nan=enc_min), enc_min, enc_max)
                 encoded[nan_mask] = 0
+                
+                cell_data[:, var_idx, stat_idx, pi] = encoded
 
                 out_path = TILES_DIR / var_name / stat / f"period{period_num:02d}.bin"
                 out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -344,6 +353,21 @@ def main():
               f"range=[{var_global_min:.2f}, {var_global_max:.2f}], "
               f"encode=[{enc_min:.2f}, {enc_max:.2f}] {var_cfg['units']}")
         ds.close()
+
+    print("\n  Writing cell chunks for tooltips...")
+    import math
+    chunk_size = manifest["chunk_size"]
+    chunks_dir = TILES_DIR / "cell_chunks"
+    chunks_dir.mkdir(parents=True, exist_ok=True)
+    num_chunks = math.ceil(n_land / chunk_size)
+    for c in range(num_chunks):
+        start = c * chunk_size
+        end = min(n_land, start + chunk_size)
+        chunk_slice = cell_data[start:end, :, :, :]
+        chunk_slice.tofile(chunks_dir / f"chunk_{c:04d}.bin")
+        total_files += 1
+    
+    print(f"  Wrote {num_chunks} chunk files")
 
     manifest_path = TILES_DIR / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2))

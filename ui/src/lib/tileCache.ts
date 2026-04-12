@@ -3,6 +3,9 @@ import type { Manifest } from "../types";
 const cache = new Map<string, Float32Array>();
 const inflight = new Map<string, Promise<Float32Array>>();
 
+const chunkCache = new Map<number, Uint8Array>();
+const chunkInflight = new Map<number, Promise<Uint8Array>>();
+
 let _manifest: Manifest | null = null;
 let _landIndex: Uint32Array | null = null;
 let _landIndexPromise: Promise<Uint32Array> | null = null;
@@ -30,6 +33,94 @@ async function getLandIndex(): Promise<Uint32Array> {
     });
 
   return _landIndexPromise;
+}
+
+export async function getLandArrayIndex(gridIndex: number): Promise<number> {
+  const landIndex = await getLandIndex();
+  let low = 0;
+  let high = landIndex.length - 1;
+  while (low <= high) {
+    const mid = (low + high) >>> 1;
+    const val = landIndex[mid];
+    if (val === gridIndex) return mid;
+    if (val < gridIndex) low = mid + 1;
+    else high = mid - 1;
+  }
+  return -1;
+}
+
+export async function fetchChunkData(landArrayIndex: number): Promise<Uint8Array | null> {
+  if (!_manifest || !_manifest.chunk_size) return null;
+  const chunkSize = _manifest.chunk_size;
+  const chunkId = Math.floor(landArrayIndex / chunkSize);
+  
+  if (chunkCache.has(chunkId)) return chunkCache.get(chunkId)!;
+  if (chunkInflight.has(chunkId)) return chunkInflight.get(chunkId)!;
+  
+  const promise = (async () => {
+    try {
+      const url = `${import.meta.env.BASE_URL}tiles/cell_chunks/chunk_${String(chunkId).padStart(4, '0')}.bin`;
+      const resp = await fetch(url);
+      if (!resp.ok) return new Uint8Array(0);
+      const buf = await resp.arrayBuffer();
+      const data = new Uint8Array(buf);
+      chunkCache.set(chunkId, data);
+      chunkInflight.delete(chunkId);
+      return data;
+    } catch {
+      chunkInflight.delete(chunkId);
+      return new Uint8Array(0);
+    }
+  })();
+  chunkInflight.set(chunkId, promise);
+  return promise;
+}
+
+export function getCachedChunkData(landArrayIndex: number): Uint8Array | null {
+  if (!_manifest || !_manifest.chunk_size) return null;
+  const chunkSize = _manifest.chunk_size;
+  const chunkId = Math.floor(landArrayIndex / chunkSize);
+  return chunkCache.get(chunkId) ?? null;
+}
+
+export function getDecodedChunkValue(
+  landArrayIndex: number,
+  varName: string,
+  statName: string,
+  periodIdx: number,
+): number | null {
+  if (!_manifest || !_manifest.chunk_size || !_manifest.variable_order) return null;
+  
+  const chunkData = getCachedChunkData(landArrayIndex);
+  if (!chunkData) return null;
+
+  const varIdx = _manifest.variable_order.indexOf(varName);
+  const statIdx = _manifest.stats.indexOf(statName);
+  if (varIdx === -1 || statIdx === -1) return null;
+
+  const numVars = _manifest.variable_order.length;
+  const numStats = _manifest.stats.length;
+  const numPeriods = _manifest.periods.length;
+  
+  const chunkSize = _manifest.chunk_size;
+  const offsetInChunk = landArrayIndex % chunkSize;
+  
+  const byteOffset = 
+    offsetInChunk * (numVars * numStats * numPeriods) +
+    varIdx * (numStats * numPeriods) +
+    statIdx * numPeriods +
+    periodIdx;
+
+  if (byteOffset >= chunkData.length) return null;
+  const raw = chunkData[byteOffset];
+  if (raw === 0) return null;
+
+  const varInfo = _manifest.variables[varName];
+  const encMin = varInfo?.encode_min ?? varInfo?.min ?? 0;
+  const encMax = varInfo?.encode_max ?? varInfo?.max ?? 1;
+  const range = encMax - encMin;
+  
+  return encMin + ((raw - 1) / 254) * range;
 }
 
 function makeKey(variable: string, stat: string, period: number): string {

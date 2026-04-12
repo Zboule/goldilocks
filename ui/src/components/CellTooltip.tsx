@@ -58,8 +58,16 @@ export default function CellTooltip({ hoveredCell }: Props) {
   return (
     <div
       ref={tooltipRef}
-      className="fixed z-50 pointer-events-none bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-gray-200 px-3 py-2 text-xs"
-      style={{ left, top }}
+      className="fixed z-50 pointer-events-none bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-gray-200 
+                 max-md:bottom-[80px] max-md:left-4 max-md:right-4 max-md:top-auto
+                 md:left-[var(--hover-left)] md:top-[var(--hover-top)] md:w-max
+                 px-2.5 py-2 sm:px-3 sm:py-2 text-[10px] sm:text-xs overflow-hidden"
+      style={
+        {
+          "--hover-left": `${left}px`,
+          "--hover-top": `${top}px`,
+        } as React.CSSProperties
+      }
     >
       <div className="font-medium text-gray-700 mb-1.5">
         {formatLat(lat)}, {formatLon(lon)}
@@ -67,13 +75,13 @@ export default function CellTooltip({ hoveredCell }: Props) {
 
       {/* Single grid for header + all rows */}
       <div
-        className="grid gap-x-2 gap-y-0.5 items-center"
-        style={{ gridTemplateColumns: "auto repeat(6, 40px)" }}
+        className="grid gap-x-1.5 sm:gap-x-2 gap-y-0.5 items-center w-full overflow-x-auto"
+        style={{ gridTemplateColumns: "auto repeat(6, minmax(28px, 40px))" }}
       >
         {/* Header row */}
         <div />
         {STAT_ORDER.map((s) => (
-          <div key={s} className="text-center text-[10px] text-gray-400">
+          <div key={s} className="text-center text-[9px] sm:text-[10px] text-gray-400">
             {STAT_LABELS[s]}
           </div>
         ))}
@@ -81,9 +89,9 @@ export default function CellTooltip({ hoveredCell }: Props) {
         {/* Data rows */}
         {visibleData.map((varData) => (
           <Fragment key={varData.variable}>
-            <div className="text-gray-600 font-medium pr-1 whitespace-nowrap">
+            <div className="text-gray-600 font-medium pr-1 whitespace-nowrap overflow-hidden text-ellipsis">
               {varData.label}
-              <span className="text-gray-400 font-normal text-[10px] ml-0.5">
+              <span className="text-gray-400 font-normal text-[9px] sm:text-[10px] ml-0.5">
                 {varData.units}
               </span>
             </div>
