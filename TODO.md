@@ -1,0 +1,2 @@
+- [ ] Preserve state in URL
+- [ ] More advanced layers

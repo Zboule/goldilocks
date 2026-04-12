@@ -6,3 +6,5 @@ netcdf4
 fsspec
 cdsapi
 tqdm
+shapely
+requests

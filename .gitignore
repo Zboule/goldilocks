@@ -7,4 +7,4 @@ logs/
 *.tar.gz
 dist
 .cursor
-*.tsbuildinfo
+*.tsbuildinfodata/natural_earth

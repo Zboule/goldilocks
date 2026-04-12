@@ -11,7 +11,7 @@ Tile size: ~344 KB raw, ~100 KB gzipped (vs 2 MB raw / 475 KB gzipped before)
 Total dataset: ~78 MB gzipped (core stats) vs ~736 MB before
 
 Reads:  data/processed/*_periods.nc
-        Land/sea mask from WeatherBench2 Zarr
+        Natural Earth 10m land polygons (auto-downloaded)
 
 Writes: data/tiles/{variable}/{stat}/period{NN}.bin  (Uint8, land-only)
         data/tiles/land_index.bin                     (Uint32, grid indices of land cells)
@@ -23,13 +23,17 @@ import xarray as xr
 import numpy as np
 import json
 import time
+import zipfile
+import io
+import requests
 from pathlib import Path
+from shapely.geometry import shape, box
+from shapely import STRtree
 
 PROCESSED_DIR = Path("data/processed")
 TILES_DIR = Path("data/tiles")
-LAND_MASK_PATH = Path("data/raw_025/land_sea_mask.nc")
-
-ZARR_URL = "gs://weatherbench2/datasets/era5/1959-2023_01_10-wb13-6h-1440x721_with_derived_variables.zarr"
+NATURAL_EARTH_DIR = Path("data/natural_earth")
+LAND_MASK_CACHE = NATURAL_EARTH_DIR / "land_mask_025.npy"
 
 VARIABLES = {
     "temperature_day":   {"file": "temperature_day_periods.nc",   "units": "°C",       "label": "Day Temperature"},
@@ -48,47 +52,175 @@ GRID_HEIGHT = 721
 RESOLUTION_DEG = 0.25
 
 
-def download_land_mask():
-    if LAND_MASK_PATH.exists():
-        print(f"  Land mask already exists: {LAND_MASK_PATH}")
-        return
+NATURAL_EARTH_URLS = {
+    "land": "https://naturalearth.s3.amazonaws.com/10m_physical/ne_10m_land.zip",
+    "minor_islands": "https://naturalearth.s3.amazonaws.com/10m_physical/ne_10m_minor_islands.zip",
+}
 
-    print(f"  Downloading land/sea mask from WeatherBench2 Zarr...")
-    ds = xr.open_zarr(ZARR_URL, chunks=None, storage_options={"token": "anon"})
 
-    for name in ["land_sea_mask", "lsm"]:
-        if name in ds:
-            mask = ds[name]
-            break
-    else:
-        available = [v for v in ds.data_vars if "land" in v.lower() or "mask" in v.lower()]
-        if available:
-            mask = ds[available[0]]
-        else:
-            print(f"  WARNING: No land/sea mask found.")
-            ds.close()
-            return
+def _download_and_extract_shapefile(name: str, url: str) -> Path:
+    """Download a Natural Earth zip and extract to NATURAL_EARTH_DIR/{name}/."""
+    extract_dir = NATURAL_EARTH_DIR / name
+    shp_files = list(extract_dir.glob("*.shp"))
+    if shp_files:
+        return shp_files[0]
 
-    if "time" in mask.dims:
-        mask = mask.isel(time=0)
+    print(f"  Downloading Natural Earth {name}...")
+    resp = requests.get(url, timeout=120)
+    resp.raise_for_status()
 
-    LAND_MASK_PATH.parent.mkdir(parents=True, exist_ok=True)
-    mask.load()
-    mask.to_netcdf(LAND_MASK_PATH)
-    ds.close()
-    print(f"  Saved: {LAND_MASK_PATH}")
+    extract_dir.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
+        zf.extractall(extract_dir)
+
+    shp_files = list(extract_dir.glob("*.shp"))
+    if not shp_files:
+        raise FileNotFoundError(f"No .shp file found in {url}")
+    print(f"  Extracted: {shp_files[0]}")
+    return shp_files[0]
+
+
+def _load_shapefile_geometries(shp_path: Path) -> list:
+    """Read geometries from a shapefile using only the standard library + shapely.
+
+    Parses the .shp/.dbf binary format directly to avoid a heavy dependency
+    on fiona or geopandas.
+    """
+    import struct
+
+    geometries = []
+    with open(shp_path, "rb") as f:
+        # --- header (100 bytes) ---
+        file_code = struct.unpack(">i", f.read(4))[0]
+        if file_code != 9994:
+            raise ValueError(f"Not a valid shapefile: {shp_path}")
+        f.seek(24)
+        file_length = struct.unpack(">i", f.read(4))[0] * 2  # in bytes
+        version = struct.unpack("<i", f.read(4))[0]
+        shape_type = struct.unpack("<i", f.read(4))[0]
+        f.seek(100)
+
+        # --- records ---
+        while f.tell() < file_length:
+            try:
+                rec_num = struct.unpack(">i", f.read(4))[0]
+                rec_len = struct.unpack(">i", f.read(4))[0] * 2
+            except struct.error:
+                break
+
+            rec_data = f.read(rec_len)
+            if len(rec_data) < 4:
+                break
+
+            rec_shape_type = struct.unpack("<i", rec_data[:4])[0]
+            if rec_shape_type == 0:  # Null shape
+                continue
+
+            # Polygon (type 5) — the only type in Natural Earth land files
+            if rec_shape_type == 5:
+                bbox = struct.unpack("<4d", rec_data[4:36])
+                num_parts = struct.unpack("<i", rec_data[36:40])[0]
+                num_points = struct.unpack("<i", rec_data[40:44])[0]
+                parts = list(struct.unpack(f"<{num_parts}i", rec_data[44:44 + num_parts * 4]))
+                pts_offset = 44 + num_parts * 4
+                points = []
+                for p in range(num_points):
+                    off = pts_offset + p * 16
+                    x, y = struct.unpack("<2d", rec_data[off:off + 16])
+                    points.append((x, y))
+
+                # Build rings
+                rings = []
+                for r in range(num_parts):
+                    start = parts[r]
+                    end = parts[r + 1] if r + 1 < num_parts else num_points
+                    rings.append(points[start:end])
+
+                # First ring is exterior, rest are holes
+                if len(rings) == 1:
+                    geojson = {"type": "Polygon", "coordinates": [rings[0]]}
+                else:
+                    geojson = {"type": "Polygon", "coordinates": rings}
+
+                try:
+                    geom = shape(geojson)
+                    if geom.is_valid:
+                        geometries.append(geom)
+                    else:
+                        geometries.append(geom.buffer(0))
+                except Exception:
+                    pass
+
+    return geometries
+
+
+def _rasterize_land_mask() -> np.ndarray:
+    """Build a boolean land mask by checking Natural Earth polygon overlap per cell.
+
+    For each 0.25° grid cell, if any land polygon intersects the cell rectangle,
+    that cell is marked as land.  Uses an STRtree spatial index for speed.
+    """
+    # Download shapefiles
+    all_geoms = []
+    for name, url in NATURAL_EARTH_URLS.items():
+        shp_path = _download_and_extract_shapefile(name, url)
+        geoms = _load_shapefile_geometries(shp_path)
+        print(f"  {name}: {len(geoms)} polygons")
+        all_geoms.extend(geoms)
+
+    print(f"  Total land polygons: {len(all_geoms)}")
+    print(f"  Building spatial index...")
+    tree = STRtree(all_geoms)
+
+    mask = np.zeros((GRID_HEIGHT, GRID_WIDTH), dtype=bool)
+    half = RESOLUTION_DEG / 2
+
+    print(f"  Rasterizing {GRID_HEIGHT} x {GRID_WIDTH} grid...")
+    t0 = time.time()
+
+    for ilat in range(GRID_HEIGHT):
+        lat = 90.0 - ilat * RESOLUTION_DEG
+        if ilat % 100 == 0:
+            elapsed = time.time() - t0
+            print(f"    row {ilat}/{GRID_HEIGHT} ({elapsed:.1f}s)")
+
+        lat_lo = lat - half
+        lat_hi = lat + half
+
+        for ilon in range(GRID_WIDTH):
+            lon = ilon * RESOLUTION_DEG  # 0..359.75
+
+            # Natural Earth uses -180..180, our grid uses 0..360
+            lon_ne = lon - 360 if lon > 180 else lon
+            cell = box(lon_ne - half, lat_lo, lon_ne + half, lat_hi)
+
+            # Check if any land polygon intersects this cell
+            hits = tree.query(cell, predicate="intersects")
+            if len(hits) > 0:
+                mask[ilat, ilon] = True
+
+    elapsed = time.time() - t0
+    print(f"  Rasterization done in {elapsed:.1f}s")
+    print(f"  Land cells: {mask.sum():,} / {mask.size:,}")
+    return mask
 
 
 def load_land_mask() -> np.ndarray:
-    """Returns boolean mask (lat=721, lon=1440), True=land."""
-    if not LAND_MASK_PATH.exists():
-        return None
+    """Returns boolean mask (lat=721, lon=1440), True=land.
 
-    mask_raw = xr.open_dataarray(LAND_MASK_PATH)
-    mask = mask_raw.values
-    if mask.shape == (GRID_WIDTH, GRID_HEIGHT):
-        mask = mask.T
-    return mask > 0.01
+    Uses Natural Earth 10m land polygons (auto-downloaded) rasterized onto
+    the 0.25° grid.  The result is cached to disk for fast re-runs.
+    """
+    if LAND_MASK_CACHE.exists():
+        print(f"  Loading cached land mask: {LAND_MASK_CACHE}")
+        return np.load(LAND_MASK_CACHE)
+
+    mask = _rasterize_land_mask()
+
+    LAND_MASK_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    np.save(LAND_MASK_CACHE, mask)
+    print(f"  Cached land mask to: {LAND_MASK_CACHE}")
+    return mask
 
 
 def encode_uint8(values: np.ndarray, enc_min: float, enc_max: float) -> np.ndarray:
@@ -104,13 +236,10 @@ def main():
     print("=" * 60)
     print("  Tile Generator (0.25°, 36 periods, uint8 land-only)")
     print(f"  Grid: {GRID_WIDTH}x{GRID_HEIGHT} ({RESOLUTION_DEG}°)")
+    print("  Land mask: Natural Earth 10m (land + minor islands)")
     print("=" * 60)
 
-    download_land_mask()
     land_mask = load_land_mask()
-    if land_mask is None:
-        print("FATAL: No land mask available.")
-        return
 
     print(f"  Land mask: {land_mask.shape}, land={land_mask.sum():,} / {land_mask.size:,}")
 
