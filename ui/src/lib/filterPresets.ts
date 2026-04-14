@@ -1,5 +1,12 @@
 import type { Filter } from "../types";
 
+export const SAFETY_FILTER: Omit<Filter, "id"> = {
+  variable: "travel_safety",
+  stat: "mean",
+  operator: "<",
+  value: 3,
+};
+
 export interface FilterPreset {
   id: string;
   label: string;

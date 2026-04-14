@@ -18,6 +18,7 @@ const OPERATOR_OPTIONS = [
 
 export default function FilterRow({ filter, manifest, onChange, onRemove }: Props) {
   const varInfo = manifest.variables[filter.variable];
+  const isCategorical = varInfo?.categorical === true;
 
   return (
     <div className="rounded border border-gray-200 bg-gray-50 p-2 relative group">
@@ -31,16 +32,23 @@ export default function FilterRow({ filter, manifest, onChange, onRemove }: Prop
       <div className="flex items-center gap-1.5 flex-wrap">
         <VariableSelect
           value={filter.variable}
-          onChange={(v) => onChange({ variable: v })}
+          onChange={(v) => {
+            const newVarInfo = manifest.variables[v];
+            const patch: Partial<Filter> = { variable: v };
+            if (newVarInfo?.categorical) patch.stat = "mean";
+            onChange(patch);
+          }}
           manifest={manifest}
           className="text-xs"
         />
-        <StatSelect
-          value={filter.stat}
-          onChange={(s) => onChange({ stat: s })}
-          stats={manifest.stats}
-          className="text-xs"
-        />
+        {!isCategorical && (
+          <StatSelect
+            value={filter.stat}
+            onChange={(s) => onChange({ stat: s })}
+            stats={manifest.stats}
+            className="text-xs"
+          />
+        )}
         <Select
           value={filter.operator}
           onChange={(v) => onChange({ operator: v as "<" | ">" | "between" })}

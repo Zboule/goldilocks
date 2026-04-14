@@ -1,12 +1,15 @@
-import { useRef, useState, useLayoutEffect, useMemo, Fragment } from "react";
-import type { HoveredCell, Manifest, CellStats } from "../types";
+import { useRef, useState, useLayoutEffect, useMemo, useEffect, useCallback, Fragment } from "react";
+import type { HoveredCell, Manifest, CellStats, CountryInfo } from "../types";
 import { formatLat, formatLon } from "../lib/gridGeometry";
-import { getColor, FIXED_DISPLAY_RANGE } from "../lib/colorScale";
+import { getColor, FIXED_DISPLAY_RANGE, SAFETY_COLORS } from "../lib/colorScale";
 import { VARIABLE_GROUPS } from "../lib/variableMetadata";
 
 interface Props {
   hoveredCell: HoveredCell | null;
   manifest: Manifest;
+  pinned?: boolean;
+  onPin?: () => void;
+  onUnpin?: () => void;
 }
 
 const STAT_ORDER = ["min", "p10", "mean", "median", "p90", "max", "ystd"];
@@ -22,9 +25,77 @@ const STAT_LABELS: Record<string, string> = {
 
 const COLS = STAT_ORDER.length + 1;
 
+const SOURCE_NAMES: Record<string, string> = {
+  us: "US",
+  de: "Germany",
+  ca: "Canada",
+};
+
+const LEVEL_SHORT_LABELS: Record<number, string> = {
+  1: "Normal",
+  2: "Caution",
+  3: "Reconsider",
+  4: "Avoid",
+};
+
 function formatValue(v: number | null, decimals = 1): string {
   if (v === null) return "—";
   return v.toFixed(decimals);
+}
+
+function levelTextColor(level: number): string {
+  if (level >= 4) return "text-red-600";
+  if (level >= 3) return "text-orange-600";
+  if (level >= 2) return "text-yellow-700";
+  return "text-green-700";
+}
+
+function levelBadgeBg(level: number): string {
+  const c = SAFETY_COLORS[level] ?? [200, 200, 200, 180];
+  return `rgba(${c[0]},${c[1]},${c[2]},0.2)`;
+}
+
+function levelBadgeBorder(level: number): string {
+  const c = SAFETY_COLORS[level] ?? [200, 200, 200, 180];
+  return `rgba(${c[0]},${c[1]},${c[2]},0.6)`;
+}
+
+function SafetySourceLinks({ country, pinned }: { country: CountryInfo; pinned?: boolean }) {
+  const sources = country.sources ?? {};
+  const entries = Object.entries(sources) as [string, { level: number; label: string; url: string }][];
+
+  if (entries.length === 0) return <span className="text-gray-400">No advisory data</span>;
+
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      {entries.map(([key, src]) => {
+        const badge = (
+          <span
+            className={`inline-flex items-center gap-0.5 rounded px-1 py-px text-[9px] font-medium border ${levelTextColor(src.level)}`}
+            style={{ backgroundColor: levelBadgeBg(src.level), borderColor: levelBadgeBorder(src.level) }}
+          >
+            <span className="text-gray-500 font-normal">{SOURCE_NAMES[key] ?? key}</span>
+            {LEVEL_SHORT_LABELS[src.level] ?? `L${src.level}`}
+          </span>
+        );
+
+        if (pinned && src.url) {
+          return (
+            <a
+              key={key}
+              href={src.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="pointer-events-auto hover:opacity-75 transition-opacity"
+            >
+              {badge}
+            </a>
+          );
+        }
+        return <span key={key}>{badge}</span>;
+      })}
+    </div>
+  );
 }
 
 function StatCells({
@@ -71,10 +142,21 @@ function StatCells({
   );
 }
 
-export default function CellTooltip({ hoveredCell, manifest }: Props) {
-  if (!hoveredCell) return null;
+export default function CellTooltip({ hoveredCell, manifest, pinned, onPin, onUnpin }: Props) {
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 300, h: 100 });
 
-  const { x, y, lon, lat, data, filterResults, loading } = hoveredCell;
+  useEffect(() => {
+    if (!pinned) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onUnpin?.();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [pinned, onUnpin]);
+
+  const filterResults = hoveredCell?.filterResults ?? [];
+  const data = hoveredCell?.data ?? [];
 
   const filterMap = useMemo(() => {
     const m = new Map<string, { passes: boolean; label: string }>();
@@ -88,9 +170,6 @@ export default function CellTooltip({ hoveredCell, manifest }: Props) {
     return m;
   }, [data]);
 
-  const tooltipRef = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ w: 300, h: 100 });
-
   useLayoutEffect(() => {
     if (tooltipRef.current) {
       const rect = tooltipRef.current.getBoundingClientRect();
@@ -99,6 +178,10 @@ export default function CellTooltip({ hoveredCell, manifest }: Props) {
       }
     }
   });
+
+  if (!hoveredCell) return null;
+
+  const { x, y, lon, lat, loading, country } = hoveredCell;
 
   const offset = 14;
   const fitsRight = x + offset + size.w < window.innerWidth;
@@ -109,21 +192,40 @@ export default function CellTooltip({ hoveredCell, manifest }: Props) {
   return (
     <div
       ref={tooltipRef}
-      className="fixed z-50 pointer-events-none bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-gray-200 
+      className={`fixed z-50 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-gray-200 
                  max-md:bottom-[80px] max-md:left-4 max-md:right-4 max-md:top-auto
                  md:left-[var(--hover-left)] md:top-[var(--hover-top)] md:w-max
-                 px-2.5 py-2 sm:px-3 sm:py-2 text-[10px] sm:text-xs overflow-hidden"
+                 px-2.5 py-2 sm:px-3 sm:py-2 text-[10px] sm:text-xs overflow-hidden
+                 ${pinned ? "pointer-events-auto ring-2 ring-blue-400/50" : "pointer-events-none"}`}
       style={
         {
           "--hover-left": `${left}px`,
           "--hover-top": `${top}px`,
         } as React.CSSProperties
       }
+      onClick={(e) => e.stopPropagation()}
     >
       <div className="font-medium text-gray-700 mb-1.5 flex items-center gap-2">
-        <span>{formatLat(lat)}, {formatLon(lon)}</span>
+        <span>
+          {country?.name && (
+            <span className="text-gray-900">{country.name} · </span>
+          )}
+          {formatLat(lat)}, {formatLon(lon)}
+        </span>
         {loading && (
           <span className="inline-block w-3 h-3 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+        )}
+        {pinned && (
+          <button
+            onClick={onUnpin}
+            className="ml-auto text-gray-400 hover:text-gray-600 text-sm leading-none px-1 pointer-events-auto"
+            title="Unpin (Esc)"
+          >
+            ×
+          </button>
+        )}
+        {!pinned && (
+          <span className="ml-auto text-[9px] text-gray-300 hidden md:inline">click to pin</span>
         )}
       </div>
 
@@ -154,6 +256,38 @@ export default function CellTooltip({ hoveredCell, manifest }: Props) {
 
                 {vars.map((varKey) => {
                   const varData = dataMap.get(varKey)!;
+                  const varInfo = manifest.variables[varKey];
+
+                  if (varInfo?.categorical) {
+                    return (
+                      <Fragment key={varKey}>
+                        <div className="text-gray-600 font-medium pr-1 whitespace-nowrap overflow-hidden text-ellipsis">
+                          {varData.label}
+                        </div>
+                        <div style={{ gridColumn: `span ${STAT_ORDER.length}` }}>
+                          {country ? (
+                            country.level > 0 ? (
+                              <SafetySourceLinks country={country} pinned={pinned} />
+                            ) : (
+                              <span className="text-gray-400 text-[10px]">No advisory data</span>
+                            )
+                          ) : (
+                            <div className="flex items-center gap-1.5">
+                              {["US", "Germany", "Canada"].map((name) => (
+                                <span
+                                  key={name}
+                                  className="inline-flex items-center rounded px-1 py-px text-[9px] text-gray-300 bg-gray-100 border border-gray-200"
+                                >
+                                  {name} ···
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </Fragment>
+                    );
+                  }
+
                   return (
                     <Fragment key={varKey}>
                       <div className="text-gray-600 font-medium pr-1 whitespace-nowrap overflow-hidden text-ellipsis">

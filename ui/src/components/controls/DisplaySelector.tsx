@@ -36,14 +36,19 @@ export default function DisplaySelector({
   const [showVarInfo, setShowVarInfo] = useState(false);
   const [showStatInfo, setShowStatInfo] = useState(false);
   const hasDetail = variable in VARIABLE_DETAILS;
+  const isCategorical = manifest.variables[variable]?.categorical === true;
 
   return (
     <>
       <div className="flex items-center gap-1.5 text-sm font-medium">
         <VariableSelect value={variable} onChange={onVariableChange} manifest={manifest} />
         {hasDetail && <InfoButton onClick={() => setShowVarInfo(true)} title="About this layer" />}
-        <StatSelect value={stat} onChange={onStatChange} stats={manifest.stats} />
-        <InfoButton onClick={() => setShowStatInfo(true)} title="About statistics" />
+        {!isCategorical && (
+          <>
+            <StatSelect value={stat} onChange={onStatChange} stats={manifest.stats} />
+            <InfoButton onClick={() => setShowStatInfo(true)} title="About statistics" />
+          </>
+        )}
       </div>
 
       {showVarInfo && (

@@ -18,20 +18,23 @@ export interface MapViewHandle {
 
 interface Props {
   onHover?: (info: HoverInfo | null) => void;
+  onClick?: () => void;
   onReady?: () => void;
 }
 
-const MapView = forwardRef<MapViewHandle, Props>(({ onHover, onReady }, ref) => {
+const MapView = forwardRef<MapViewHandle, Props>(({ onHover, onClick, onReady }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [attribOpen, setAttribOpen] = useState(false);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const overlayRef = useRef<MapboxOverlay | null>(null);
   const onHoverRef = useRef(onHover);
+  const onClickRef = useRef(onClick);
   const onReadyRef = useRef(onReady);
   const cellsRef = useRef<StaticCell[]>([]);
   const colorsRef = useRef<Uint8Array | null>(null);
   const colorVersionRef = useRef(0);
   onHoverRef.current = onHover;
+  onClickRef.current = onClick;
   onReadyRef.current = onReady;
 
   useImperativeHandle(ref, () => ({
@@ -165,6 +168,10 @@ const MapView = forwardRef<MapViewHandle, Props>(({ onHover, onReady }, ref) => 
 
           map.getCanvas().addEventListener("mouseleave", () => {
             onHoverRef.current?.(null);
+          });
+
+          map.getCanvas().addEventListener("click", () => {
+            onClickRef.current?.();
           });
 
           overlayRef.current = overlay;

@@ -53,6 +53,10 @@ export const VARIABLE_GROUPS: VariableGroup[] = [
       "windy_days",
     ],
   },
+  {
+    label: "Safety",
+    variables: ["travel_safety"],
+  },
 ];
 
 export const VARIABLE_DETAILS: Record<string, VariableDetail> = {
@@ -330,6 +334,22 @@ export const VARIABLE_DETAILS: Record<string, VariableDetail> = {
       { range: "0.20–0.40", label: "Often windy", value: 0.30 },
       { range: "0.40–0.70", label: "Very windy — exposed/coastal", value: 0.55 },
       { range: "> 0.70", label: "Persistently windy", value: 0.85 },
+    ],
+  },
+  travel_safety: {
+    id: "travel_safety",
+    source: "Composite of US State Dept, Germany (Auswärtiges Amt), and Canada (Global Affairs)",
+    rawVariable: "Advisory level 1–4 per country (averaged across sources)",
+    derivation:
+      "Each country is assigned advisory levels by three governments. The Goldilocks composite is the average of available sources, rounded to the nearest integer. Grid cells inherit the composite level of their country via spatial join on Natural Earth admin-0 boundaries. Border cells use the maximum risk among overlapping countries.",
+    temporalAgg: "Static — does not vary by period. Same value for all time periods.",
+    stats:
+      "Single value per cell (all statistics are identical). Use in filters: e.g., travel_safety < 3 to exclude Level 3 and 4 countries.",
+    ranges: [
+      { range: "1", label: "Exercise Normal Precautions", value: 1 },
+      { range: "2", label: "Exercise Increased Caution", value: 2 },
+      { range: "3", label: "Reconsider Travel", value: 3 },
+      { range: "4", label: "Do Not Travel", value: 4 },
     ],
   },
 };

@@ -7,6 +7,24 @@ export interface VariableInfo {
   display_max: number;
   encode_min?: number;
   encode_max?: number;
+  categorical?: boolean;
+}
+
+export interface AdvisorySource {
+  level: number;
+  label: string;
+  url: string;
+}
+
+export interface CountryInfo {
+  iso_a2: string;
+  name: string;
+  level: number;
+  sources: {
+    us?: AdvisorySource;
+    de?: AdvisorySource;
+    ca?: AdvisorySource;
+  };
 }
 
 export interface Manifest {
@@ -63,4 +81,5 @@ export interface HoveredCell {
   data: CellStats[];
   filterResults: { filterId: string; variable: string; stat: string; label: string; passes: boolean }[];
   loading?: boolean;
+  country?: CountryInfo;
 }

@@ -1,4 +1,4 @@
-import type { Manifest } from "../types";
+import type { Manifest, CountryInfo } from "../types";
 
 const cache = new Map<string, Float32Array>();
 const inflight = new Map<string, Promise<Float32Array>>();
@@ -37,7 +37,7 @@ function queuedFetch(url: string): Promise<Response> {
 }
 
 // --- Persistent Cache API for .bin files ---
-const CACHE_NAME = "goldilocks-tiles-v1";
+const CACHE_NAME = "goldilocks-tiles-v3";
 let _cacheStorage: Cache | null = null;
 let _cacheReady: Promise<Cache | null> | null = null;
 
@@ -226,7 +226,8 @@ export function getDecodedChunkValue(
   const varInfo = _manifest.variables[varName];
   const encMin = varInfo?.encode_min ?? varInfo?.min ?? 0;
   const encMax = varInfo?.encode_max ?? varInfo?.max ?? 1;
-  return encMin + ((raw - 1) / 254) * (encMax - encMin);
+  const value = encMin + ((raw - 1) / 254) * (encMax - encMin);
+  return varInfo?.categorical ? Math.round(value) : value;
 }
 
 function makeKey(variable: string, stat: string, period: number): string {
@@ -292,10 +293,10 @@ export async function fetchTile(
       const buf = await resp.arrayBuffer();
 
       let data: Float32Array;
+      const varInfo = _manifest?.variables[variable];
 
       if (encoding === "uint8-land-only") {
         const landIndex = await getLandIndex();
-        const varInfo = _manifest?.variables[variable];
         const encMin = varInfo?.encode_min ?? varInfo?.min ?? 0;
         const encMax = varInfo?.encode_max ?? varInfo?.max ?? 1;
         data = decodeLandOnlyUint8(new Uint8Array(buf), landIndex, gridSize, encMin, encMax);
@@ -303,6 +304,12 @@ export async function fetchTile(
         data = decodeUint16(buf, variable, gridSize);
       } else {
         data = new Float32Array(buf);
+      }
+
+      if (varInfo?.categorical) {
+        for (let i = 0; i < data.length; i++) {
+          if (!Number.isNaN(data[i])) data[i] = Math.round(data[i]);
+        }
       }
 
       cache.set(key, data);
@@ -335,4 +342,55 @@ export function getCachedValue(
   if (!tile || index < 0 || index >= tile.length) return null;
   const v = tile[index];
   return Number.isNaN(v) ? null : v;
+}
+
+// --- Country index (for tooltip enrichment) ---
+
+let _countryIndex: Uint8Array | null = null;
+let _countryLookup: (CountryInfo | null)[] | null = null;
+let _countryDataPromise: Promise<void> | null = null;
+
+async function loadCountryData(): Promise<void> {
+  if (_countryIndex && _countryLookup) return;
+  if (_countryDataPromise) return _countryDataPromise;
+
+  _countryDataPromise = (async () => {
+    const [indexResp, lookupResp] = await Promise.all([
+      cachedFetch(`${import.meta.env.BASE_URL}tiles/country_index.bin`),
+      cachedFetch(`${import.meta.env.BASE_URL}tiles/country_lookup.json`),
+    ]);
+    const [indexBuf, lookupJson] = await Promise.all([
+      indexResp.arrayBuffer(),
+      lookupResp.json(),
+    ]);
+    _countryIndex = new Uint8Array(indexBuf);
+    _countryLookup = lookupJson as (CountryInfo | null)[];
+  })();
+
+  return _countryDataPromise;
+}
+
+export async function getCountryForLandCell(
+  landArrayIndex: number,
+): Promise<CountryInfo | null> {
+  await loadCountryData();
+  if (!_countryIndex || !_countryLookup) return null;
+  if (landArrayIndex < 0 || landArrayIndex >= _countryIndex.length) return null;
+  const idx = _countryIndex[landArrayIndex];
+  if (idx === 0) return null;
+  return _countryLookup[idx] ?? null;
+}
+
+export function getCountryForLandCellSync(
+  landArrayIndex: number,
+): CountryInfo | null {
+  if (!_countryIndex || !_countryLookup) return null;
+  if (landArrayIndex < 0 || landArrayIndex >= _countryIndex.length) return null;
+  const idx = _countryIndex[landArrayIndex];
+  if (idx === 0) return null;
+  return _countryLookup[idx] ?? null;
+}
+
+export function isCountryDataReady(): boolean {
+  return _countryIndex !== null && _countryLookup !== null;
 }

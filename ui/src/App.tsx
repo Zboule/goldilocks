@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useManifest } from "./hooks/useManifest";
 import { useFilters } from "./hooks/useFilters";
 import { usePeriodSelection } from "./hooks/usePeriodSelection";
@@ -81,6 +81,20 @@ export default function App() {
     filters,
   );
 
+  const [pinnedCell, setPinnedCell] = useState<typeof hoveredCell>(null);
+
+  const handleMapClick = useCallback(() => {
+    if (pinnedCell) {
+      setPinnedCell(null);
+    } else if (hoveredCell && !hoveredCell.loading) {
+      setPinnedCell(hoveredCell);
+    }
+  }, [pinnedCell, hoveredCell]);
+
+  const handleUnpin = useCallback(() => setPinnedCell(null), []);
+
+  const displayedCell = pinnedCell ?? hoveredCell;
+
   if (manifestLoading || !manifest || selectedPeriods.length === 0) {
     return (
       <div className="flex items-center justify-center h-screen text-gray-500">
@@ -128,10 +142,17 @@ export default function App() {
           <MapView
             ref={mapRef}
             onHover={onCellHover}
+            onClick={handleMapClick}
             onReady={() => setMapReady(true)}
           />
 
-          <CellTooltip hoveredCell={hoveredCell} manifest={manifest} />
+          <CellTooltip
+            hoveredCell={displayedCell}
+            manifest={manifest}
+            pinned={!!pinnedCell}
+            onPin={handleMapClick}
+            onUnpin={handleUnpin}
+          />
 
           <ColorLegend
             variable={displayVariable}
@@ -140,6 +161,7 @@ export default function App() {
             max={displayStat === "ystd" ? (YSTD_DISPLAY_MAX[displayVariable] ?? 5) : (FIXED_DISPLAY_RANGE[displayVariable]?.[1] ?? varInfo.display_max)}
             units={varInfo.units}
             filterCount={filters.length}
+            categorical={varInfo.categorical}
           />
 
           {colorsLoading && (

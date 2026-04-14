@@ -3,6 +3,7 @@ import type { Manifest, Filter, HoveredCell, CellStats } from "../types";
 import {
   getCachedValue, getLandArrayIndex, fetchChunkDataForPeriods,
   getDecodedChunkValue, areChunksCached, isLandIndexReady, getLandArrayIndexSync,
+  getCountryForLandCellSync, getCountryForLandCell, isCountryDataReady,
 } from "../lib/tileCache";
 import { evaluateFilter, describeFilter } from "../lib/filterEngine";
 import { indexToLonLat } from "../lib/gridGeometry";
@@ -147,7 +148,11 @@ export function useHoveredCell(
 
         if (!useChunks || areChunksCached(landIdx, periodIndices)) {
           const { data, filterResults } = buildCellData(info, landIdx);
-          setHoveredCell({ ...baseCell, data, filterResults, loading: false });
+          const country = isCountryDataReady() ? getCountryForLandCellSync(landIdx) : null;
+          setHoveredCell({
+            ...baseCell, data, filterResults, loading: false,
+            ...(country ? { country } : {}),
+          });
           return;
         }
       }
@@ -161,13 +166,17 @@ export function useHoveredCell(
           return;
         }
 
-        if (useChunks) {
-          await fetchChunkDataForPeriods(landIdx, periodIndices);
-        }
+        const [, country] = await Promise.all([
+          useChunks ? fetchChunkDataForPeriods(landIdx, periodIndices) : Promise.resolve(),
+          getCountryForLandCell(landIdx),
+        ]);
         if (seqRef.current !== currentSeq) return;
 
         const { data, filterResults } = buildCellData(info, landIdx);
-        setHoveredCell({ ...baseCell, data, filterResults, loading: false });
+        setHoveredCell({
+          ...baseCell, data, filterResults, loading: false,
+          ...(country ? { country } : {}),
+        });
       });
     },
     [manifest, periods, displayVariable, filters, buildCellData, buildSkeleton],

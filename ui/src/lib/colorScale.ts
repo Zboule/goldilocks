@@ -130,6 +130,13 @@ function volatilityToColor(value: number, min: number, max: number): RGBA {
   return purpleRamp(Math.min(t, 1));
 }
 
+const SAFETY_COLORS: Record<number, RGBA> = {
+  1: [34, 197, 94, 180],    // green
+  2: [234, 179, 8, 180],    // yellow
+  3: [249, 115, 22, 180],   // orange
+  4: [220, 38, 38, 180],    // red
+};
+
 const PALETTES: Record<string, (t: number) => RGBA> = {
   wind_speed: viridis,
   precipitation: blues,
@@ -179,6 +186,7 @@ export const FIXED_DISPLAY_RANGE: Record<string, [number, number]> = {
   apparent_temperature_day: [-30, 45],
   apparent_temperature_night: [-30, 45],
   dew_point: [-30, 45],
+  travel_safety: [1, 4],
 };
 
 export const YSTD_DISPLAY_MAX: Record<string, number> = {
@@ -210,12 +218,18 @@ export function getColor(
   if (stat === "ystd") {
     return volatilityToColor(value, min, max);
   }
+  if (variable === "travel_safety") {
+    const level = Math.round(value);
+    return SAFETY_COLORS[level] ?? [200, 200, 200, 160];
+  }
   if (TEMP_VARIABLES.has(variable))
     return temperatureToColor(value);
   const palette = PALETTES[variable] ?? viridis;
   const t = max === min ? 0.5 : (value - min) / (max - min);
   return palette(t);
 }
+
+export { SAFETY_COLORS };
 
 export const GRAY_COLOR: RGBA = [245, 245, 245, 160];
 

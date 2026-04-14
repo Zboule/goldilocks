@@ -6,7 +6,7 @@ interface Props {
   open: boolean;
   manifest: Manifest;
   filters: Filter[];
-  onAdd: () => void;
+  onAdd: (defaults?: Partial<Filter>) => void;
   onRemove: (id: string) => void;
   onUpdate: (id: string, patch: Partial<Filter>) => void;
   onClear: () => void;
