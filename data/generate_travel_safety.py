@@ -113,9 +113,9 @@ def fetch_germany_advisories() -> dict:
 
         if warning:
             level = 4
-        elif partial_warning or situation_warning:
+        elif situation_warning:
             level = 3
-        elif situation_part_warning:
+        elif partial_warning or situation_part_warning:
             level = 2
         else:
             level = 1
