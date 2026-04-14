@@ -40,9 +40,9 @@ jobs:
 
       - name: Download tiles from release
         run: |
-          gh release download v2.2.1 --repo Zboule/goldilocks \
+          gh release download v2.3.0 --repo Zboule/goldilocks \
             --pattern "tiles-*.tar.gz" --dir /tmp --clobber
-          tar -xzf /tmp/tiles-v2.2.1.tar.gz -C ui/dist/
+          tar -xzf /tmp/tiles-v2.3.0.tar.gz -C ui/dist/
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
