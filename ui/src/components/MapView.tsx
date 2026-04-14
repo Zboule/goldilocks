@@ -1,7 +1,7 @@
-import { useRef, useEffect, useImperativeHandle, forwardRef } from "react";
+import { useRef, useState, useEffect, useImperativeHandle, forwardRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { Deck } from "@deck.gl/core";
+import { MapboxOverlay } from "@deck.gl/mapbox";
 import { PolygonLayer } from "@deck.gl/layers";
 import type { StaticCell } from "../hooks/useStaticGrid";
 
@@ -23,8 +23,9 @@ interface Props {
 
 const MapView = forwardRef<MapViewHandle, Props>(({ onHover, onReady }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [attribOpen, setAttribOpen] = useState(false);
   const mapRef = useRef<maplibregl.Map | null>(null);
-  const deckRef = useRef<Deck | null>(null);
+  const overlayRef = useRef<MapboxOverlay | null>(null);
   const onHoverRef = useRef(onHover);
   const onReadyRef = useRef(onReady);
   const cellsRef = useRef<StaticCell[]>([]);
@@ -36,26 +37,26 @@ const MapView = forwardRef<MapViewHandle, Props>(({ onHover, onReady }, ref) => 
   useImperativeHandle(ref, () => ({
     setPolygons(cells: StaticCell[]) {
       cellsRef.current = cells;
-      if (deckRef.current && colorsRef.current) {
+      if (overlayRef.current && colorsRef.current) {
         updateDeckLayer();
       }
     },
     updateColors(colors: Uint8Array, version: number) {
       colorsRef.current = colors;
       colorVersionRef.current = version;
-      if (deckRef.current && cellsRef.current.length > 0) {
+      if (overlayRef.current && cellsRef.current.length > 0) {
         updateDeckLayer();
       }
     },
   }), []);
 
   function updateDeckLayer() {
-    if (!deckRef.current) return;
+    if (!overlayRef.current) return;
     const cells = cellsRef.current;
     const colors = colorsRef.current;
     const version = colorVersionRef.current;
 
-    deckRef.current.setProps({
+    overlayRef.current.setProps({
       layers: [
         new PolygonLayer<StaticCell>({
           id: "heatmap",
@@ -73,6 +74,7 @@ const MapView = forwardRef<MapViewHandle, Props>(({ onHover, onReady }, ref) => 
           autoHighlight: true,
           highlightColor: [255, 255, 255, 80],
           extruded: false,
+          beforeId: firstLabelLayerRef.current ?? undefined,
           updateTriggers: {
             getFillColor: [version],
           },
@@ -81,94 +83,130 @@ const MapView = forwardRef<MapViewHandle, Props>(({ onHover, onReady }, ref) => 
     });
   }
 
+  const firstLabelLayerRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
+    let cancelled = false;
+    let resizeObserver: ResizeObserver | null = null;
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: "https://tiles.openfreemap.org/styles/positron",
-      center: [20, 20],
-      zoom: 2,
-      attributionControl: false,
-    });
+    fetch("https://tiles.openfreemap.org/styles/positron")
+      .then((res) => res.json())
+      .then((style) => {
+        if (cancelled || !containerRef.current) return;
 
-    map.addControl(new maplibregl.NavigationControl(), "top-right");
+        const englishName = ["coalesce", ["get", "name:en"], ["get", "name:latin"], ["get", "name"]];
 
-    map.on("load", () => {
-      const deck = new Deck({
-        parent: containerRef.current!,
-        style: {
-          position: "absolute",
-          top: "0",
-          left: "0",
-          pointerEvents: "none",
-        },
-        viewState: {
-          longitude: map.getCenter().lng,
-          latitude: map.getCenter().lat,
-          zoom: map.getZoom(),
-          bearing: map.getBearing(),
-          pitch: map.getPitch(),
-        },
-        controller: false,
-        layers: [],
-        getTooltip: () => null,
-      });
+        for (const layer of style.layers) {
+          if (layer.type !== "symbol" || !layer.layout?.["text-field"]) continue;
+          layer.layout["text-field"] = englishName;
 
-      map.on("move", () => {
-        deck.setProps({
-          viewState: {
-            longitude: map.getCenter().lng,
-            latitude: map.getCenter().lat,
-            zoom: map.getZoom(),
-            bearing: map.getBearing(),
-            pitch: map.getPitch(),
-          },
-        });
-      });
-
-      map.getCanvas().addEventListener("mousemove", (e) => {
-        const picked = deck.pickObject({
-          x: e.offsetX,
-          y: e.offsetY,
-          radius: 0,
-        });
-        if (picked?.object) {
-          const cell = picked.object as StaticCell;
-          onHoverRef.current?.({
-            index: cell.index,
-            x: e.clientX,
-            y: e.clientY,
-          });
-        } else {
-          onHoverRef.current?.(null);
+          const id = layer.id as string;
+          if (id.startsWith("label_country")) {
+            layer.layout["text-transform"] = "uppercase";
+            layer.layout["text-letter-spacing"] = 0.15;
+            layer.paint = {
+              ...layer.paint,
+              "text-color": "#333",
+              "text-halo-color": "rgba(255,255,255,0.4)",
+              "text-halo-width": 1.5,
+              "text-halo-blur": 0,
+            };
+          } else if (id === "label_state") {
+            layer.layout["visibility"] = "none";
+          } else if (id.startsWith("label_city") || id === "label_town" || id === "label_village") {
+            layer.paint = {
+              ...layer.paint,
+              "text-color": "#777",
+              "text-halo-color": "rgba(255,255,255,0.4)",
+              "text-halo-width": 1,
+              "text-halo-blur": 0.5,
+            };
+          }
         }
+
+        const firstSymbol = style.layers.find((l: { type: string }) => l.type === "symbol");
+        if (firstSymbol) firstLabelLayerRef.current = firstSymbol.id;
+
+        const map = new maplibregl.Map({
+          container: containerRef.current!,
+          style,
+          center: [20, 20],
+          zoom: 2,
+          attributionControl: false,
+        });
+
+        map.addControl(new maplibregl.NavigationControl(), "top-right");
+
+        const overlay = new MapboxOverlay({
+          interleaved: true,
+          layers: [],
+        });
+        map.addControl(overlay);
+
+        map.on("load", () => {
+          map.getCanvas().addEventListener("mousemove", (e) => {
+            const picked = overlay.pickObject({
+              x: e.offsetX,
+              y: e.offsetY,
+              radius: 0,
+            });
+            if (picked?.object) {
+              const cell = picked.object as StaticCell;
+              onHoverRef.current?.({
+                index: cell.index,
+                x: e.clientX,
+                y: e.clientY,
+              });
+            } else {
+              onHoverRef.current?.(null);
+            }
+          });
+
+          map.getCanvas().addEventListener("mouseleave", () => {
+            onHoverRef.current?.(null);
+          });
+
+          overlayRef.current = overlay;
+          mapRef.current = map;
+          onReadyRef.current?.();
+        });
+
+        resizeObserver = new ResizeObserver(() => map.resize());
+        resizeObserver.observe(containerRef.current!);
       });
-
-      map.getCanvas().addEventListener("mouseleave", () => {
-        onHoverRef.current?.(null);
-      });
-
-      deckRef.current = deck;
-      mapRef.current = map;
-      onReadyRef.current?.();
-    });
-
-    const resizeObserver = new ResizeObserver(() => {
-      map.resize();
-    });
-    resizeObserver.observe(containerRef.current!);
 
     return () => {
-      resizeObserver.disconnect();
-      deckRef.current?.finalize();
-      map.remove();
+      cancelled = true;
+      resizeObserver?.disconnect();
+      if (overlayRef.current) overlayRef.current.finalize();
+      if (mapRef.current) mapRef.current.remove();
       mapRef.current = null;
-      deckRef.current = null;
+      overlayRef.current = null;
     };
   }, []);
 
-  return <div ref={containerRef} className="w-full h-full relative" />;
+  return (
+    <div className="w-full h-full relative">
+      <div ref={containerRef} className="w-full h-full" />
+      <div className="absolute bottom-0 right-0 z-10 flex items-end gap-1 p-1">
+        {attribOpen && (
+          <div className="bg-white/60 text-[10px] text-gray-500 px-2 py-1 rounded shadow">
+            © <a href="https://openfreemap.org" target="_blank" rel="noopener noreferrer" className="underline">OpenFreeMap</a>
+            {" · "}
+            <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="underline">OpenStreetMap</a>
+          </div>
+        )}
+        <button
+          onClick={() => setAttribOpen((v) => !v)}
+          className="w-6 h-6 bg-white/60 rounded-full text-gray-400 hover:text-gray-700 text-sm flex items-center justify-center shadow cursor-pointer"
+          title="Attribution"
+        >
+          ⓘ
+        </button>
+      </div>
+    </div>
+  );
 });
 
 MapView.displayName = "MapView";
