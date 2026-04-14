@@ -28,18 +28,15 @@ export default function FilterPanel({
         <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">
           Presets
         </span>
-        <div className="flex flex-col gap-1">
+        <div className="grid grid-cols-2 gap-1.5">
           {PRESETS.map((preset) => (
             <button
               key={preset.id}
               onClick={() => onLoadPreset(preset.filters)}
               title={preset.description}
-              className="rounded border border-gray-200 bg-white hover:bg-blue-50 hover:border-blue-200 text-xs px-3 py-1.5 transition-colors text-left"
+              className="cursor-pointer rounded border border-gray-200 bg-white hover:bg-blue-50 hover:border-blue-300 text-[11px] px-2 py-1.5 transition-colors text-center truncate"
             >
-              <span className="font-medium">{preset.emoji} {preset.label}</span>
-              <span className="block text-[10px] text-gray-400 mt-0.5">
-                {preset.description}
-              </span>
+              {preset.emoji} {preset.label}
             </button>
           ))}
         </div>

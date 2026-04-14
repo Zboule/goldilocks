@@ -15,7 +15,10 @@ interface Props {
   onDisplayStatChange: (s: string) => void;
   onClickPeriod: (p: number) => void;
   onSetActivePeriod: (p: number) => void;
+  onLockAll: () => void;
+  onClearLocked: () => void;
   onToggleFilters: () => void;
+  loadingPeriods: Set<number>;
 }
 
 export default function ControlBar({
@@ -30,7 +33,10 @@ export default function ControlBar({
   onDisplayStatChange,
   onClickPeriod,
   onSetActivePeriod,
+  onLockAll,
+  onClearLocked,
   onToggleFilters,
+  loadingPeriods,
 }: Props) {
   const [playing, setPlaying] = useState(false);
 
@@ -54,7 +60,7 @@ export default function ControlBar({
   );
 
   return (
-    <div className="shrink-0 bg-white border-b border-gray-200 px-3 md:px-4 py-2 md:py-0 md:pt-4 md:pb-5 z-10">
+    <div className="shrink-0 bg-white border-b border-gray-200 px-3 md:px-4 py-2 md:py-0 md:pt-4 md:pb-5 z-50">
       {/* Desktop: single row | Mobile: two rows */}
       <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
         {/* Row 1: Logo + Filters + spacer + Display selectors + spacer + Play (mobile) */}
@@ -129,6 +135,9 @@ export default function ControlBar({
             onTogglePlay={() => setPlaying((p) => !p)}
             onClickPeriod={onClickPeriod}
             onSetActive={onSetActivePeriod}
+            onLockAll={onLockAll}
+            onClearLocked={onClearLocked}
+            loadingPeriods={loadingPeriods}
           />
         </div>
       </div>

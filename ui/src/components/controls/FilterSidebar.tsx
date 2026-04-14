@@ -54,7 +54,7 @@ export default function FilterSidebar({
           // Mobile: bottom sheet
           "fixed inset-x-0 bottom-0 max-h-[80vh] rounded-t-2xl shadow-2xl",
           // Desktop: sidebar
-          "md:static md:inset-auto md:max-h-none md:rounded-none md:shadow-none md:shrink-0 md:w-80 md:border-r md:border-gray-200",
+          "md:static md:inset-auto md:max-h-none md:rounded-none md:shadow-none md:shrink-0 md:w-[362px] md:border-r md:border-gray-200",
         ].join(" ")}
       >
         {/* Drag handle (mobile only) */}

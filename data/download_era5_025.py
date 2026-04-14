@@ -39,6 +39,13 @@ VARIABLES = [
     "total_cloud_cover",
 ]
 
+LEVEL_VARIABLES = [
+    {"name": "relative_humidity", "level": 1000, "save_as": "relative_humidity_1000hPa"},
+]
+
+SOLAR_ZARR_URL = "gs://weatherbench2/datasets/era5/1959-2022-6h-1440x721.zarr"
+SOLAR_VARIABLES = ["toa_incident_solar_radiation_6hr"]
+
 MAX_RETRIES = 3
 RETRY_BACKOFF = [30, 60, 120]
 
@@ -75,15 +82,16 @@ def is_valid_chunk(path: Path, year: int, month: int) -> bool:
         return False
 
 
-def download_chunk(ds: xr.Dataset, var_name: str, year: int, month: int, out_dir: Path) -> bool:
-    """Download one month of one variable. Returns True on success."""
+def download_chunk(ds: xr.Dataset, var_name: str, year: int, month: int,
+                   out_dir: Path, level: int | None = None) -> bool:
+    """Download one month of one variable. Returns True on success.
+    If level is set, selects that pressure level before computing."""
     out_file = out_dir / f"{year}-{month:02d}.nc"
     tmp_file = out_dir / f"{year}-{month:02d}.tmp"
 
     if is_valid_chunk(out_file, year, month):
         return True
 
-    # Clean up any partial downloads
     if tmp_file.exists():
         tmp_file.unlink()
 
@@ -96,6 +104,8 @@ def download_chunk(ds: xr.Dataset, var_name: str, year: int, month: int, out_dir
     for attempt in range(MAX_RETRIES):
         try:
             chunk = ds[var_name].sel(time=slice(t_start, t_end))
+            if level is not None:
+                chunk = chunk.sel(level=level)
             with ProgressBar(minimum=2.0, dt=5.0):
                 data = chunk.compute()
             data.to_netcdf(tmp_file)
@@ -155,100 +165,120 @@ def main():
     print(f"  Already done: {done_count}")
     print(f"  Remaining:    {total_chunks - done_count}")
 
-    if done_count == total_chunks:
-        print("\n  All downloads complete!")
-        return
-
-    print(f"\n  Opening Zarr (metadata only)...", flush=True)
-    ds = xr.open_zarr(
-        ZARR_URL,
-        chunks={"time": 124},
-        storage_options={"token": "anon"},
-    )
-    print(f"  OK. Grid: {ds.sizes['longitude']}×{ds.sizes['latitude']}")
-
     completed = done_count
     failed = []
     start_time = time.time()
-    chunk_times = []
 
-    for vi, var_name in enumerate(VARIABLES):
-        var_dir = RAW_DIR / var_name
-        var_dir.mkdir(parents=True, exist_ok=True)
+    if done_count < total_chunks:
+        print(f"\n  Opening Zarr (metadata only)...", flush=True)
+        ds = xr.open_zarr(ZARR_URL, chunks={"time": 124}, storage_options={"token": "anon"})
+        print(f"  OK. Grid: {ds.sizes['longitude']}×{ds.sizes['latitude']}")
+        chunk_times = []
 
-        for mi, (year, month) in enumerate(months):
-            chunk_id = f"{var_name}/{year}-{month:02d}"
-            out_file = var_dir / f"{year}-{month:02d}.nc"
+        for vi, var_name in enumerate(VARIABLES):
+            var_dir = RAW_DIR / var_name
+            var_dir.mkdir(parents=True, exist_ok=True)
 
-            if is_valid_chunk(out_file, year, month):
-                continue
+            for mi, (year, month) in enumerate(months):
+                chunk_id = f"{var_name}/{year}-{month:02d}"
+                out_file = var_dir / f"{year}-{month:02d}.nc"
 
-            chunk_start = time.time()
+                if is_valid_chunk(out_file, year, month):
+                    continue
 
-            # Progress bar
-            pct = 100 * completed / total_chunks
-            elapsed = time.time() - start_time
-            if chunk_times:
-                avg_chunk = sum(chunk_times) / len(chunk_times)
-                remaining = (total_chunks - completed) * avg_chunk
-                eta = format_time(remaining)
-            else:
-                eta = "calculating..."
+                chunk_start = time.time()
+                pct = 100 * completed / total_chunks
+                if chunk_times:
+                    avg_chunk = sum(chunk_times) / len(chunk_times)
+                    eta = format_time((total_chunks - completed) * avg_chunk)
+                else:
+                    eta = "calculating..."
 
-            done_bytes = sum(
-                f.stat().st_size
-                for var in VARIABLES
-                for f in (RAW_DIR / var).glob("*.nc")
-                if f.exists()
-            )
+                bar_width = 30
+                filled = int(bar_width * completed / total_chunks)
+                bar = "=" * filled + ">" + " " * (bar_width - filled - 1)
+                print(f"\r  [{bar}] {completed}/{total_chunks} ({pct:.0f}%) — {chunk_id} — ETA: {eta}   ",
+                      end="", flush=True)
 
-            bar_width = 30
-            filled = int(bar_width * completed / total_chunks)
-            bar = "=" * filled + ">" + " " * (bar_width - filled - 1)
-            print(
-                f"\r  [{bar}] {completed}/{total_chunks} ({pct:.0f}%) "
-                f"— {chunk_id} — {format_bytes(done_bytes)} — ETA: {eta}   ",
-                end="",
-                flush=True,
-            )
+                success = download_chunk(ds, var_name, year, month, var_dir)
+                chunk_elapsed = time.time() - chunk_start
 
-            success = download_chunk(ds, var_name, year, month, var_dir)
+                if success:
+                    completed += 1
+                    chunk_times.append(chunk_elapsed)
+                    if len(chunk_times) > 10:
+                        chunk_times = chunk_times[-10:]
+                    print(f"\r  {chunk_id} ✓ {format_bytes(out_file.stat().st_size)} in {format_time(chunk_elapsed)}   ",
+                          flush=True)
+                else:
+                    failed.append(chunk_id)
 
-            chunk_elapsed = time.time() - chunk_start
+            var_files = list(var_dir.glob("*.nc"))
+            var_size = sum(f.stat().st_size for f in var_files)
+            print(f"\n  {var_name}: {len(var_files)}/{len(months)} months, {format_bytes(var_size)}")
 
-            if success:
-                completed += 1
-                chunk_times.append(chunk_elapsed)
-                # Keep only last 10 for moving average
-                if len(chunk_times) > 10:
-                    chunk_times = chunk_times[-10:]
-                size = out_file.stat().st_size
-                print(
-                    f"\r  [{bar}] {completed}/{total_chunks} ({100*completed/total_chunks:.0f}%) "
-                    f"— {chunk_id} ✓ {format_bytes(size)} in {format_time(chunk_elapsed)}   ",
-                    flush=True,
-                )
-            else:
-                failed.append(chunk_id)
+        ds.close()
+    else:
+        print("\n  All surface variables already downloaded.")
 
-        # Variable summary
-        var_files = list(var_dir.glob("*.nc"))
-        var_size = sum(f.stat().st_size for f in var_files)
-        print(f"\n  {var_name}: {len(var_files)}/{len(months)} months, {format_bytes(var_size)}")
+    # --- Level-selected variables (e.g., RH at 1000 hPa) ---
+    if LEVEL_VARIABLES:
+        print(f"\n  Opening Zarr for level variables...", flush=True)
+        ds_lev = xr.open_zarr(ZARR_URL, chunks={"time": 124}, storage_options={"token": "anon"})
+        for lv in LEVEL_VARIABLES:
+            save_name = lv["save_as"]
+            var_dir = RAW_DIR / save_name
+            var_dir.mkdir(parents=True, exist_ok=True)
+            print(f"\n  {save_name} (level={lv['level']}):")
+            for year, month in months:
+                chunk_id = f"{save_name}/{year}-{month:02d}"
+                out_file = var_dir / f"{year}-{month:02d}.nc"
+                if is_valid_chunk(out_file, year, month):
+                    continue
+                t1 = time.time()
+                success = download_chunk(ds_lev, lv["name"], year, month, var_dir, level=lv["level"])
+                if success:
+                    completed += 1
+                    print(f"    {chunk_id} ✓ {format_bytes(out_file.stat().st_size)} in {format_time(time.time()-t1)}")
+                else:
+                    failed.append(chunk_id)
+            var_files = list(var_dir.glob("*.nc"))
+            print(f"    {save_name}: {len(var_files)}/{len(months)} months, {format_bytes(sum(f.stat().st_size for f in var_files))}")
+        ds_lev.close()
 
-    ds.close()
+    # --- Solar variable from a different dataset ---
+    if SOLAR_VARIABLES:
+        print(f"\n  Opening solar Zarr: {SOLAR_ZARR_URL}")
+        ds_sol = xr.open_zarr(SOLAR_ZARR_URL, chunks={"time": 124}, storage_options={"token": "anon"})
+        for var_name in SOLAR_VARIABLES:
+            var_dir = RAW_DIR / var_name
+            var_dir.mkdir(parents=True, exist_ok=True)
+            print(f"\n  {var_name} (solar dataset, ends 2021-12):")
+            for year, month in months:
+                if year > 2021:
+                    continue
+                chunk_id = f"{var_name}/{year}-{month:02d}"
+                out_file = var_dir / f"{year}-{month:02d}.nc"
+                if is_valid_chunk(out_file, year, month):
+                    continue
+                t1 = time.time()
+                success = download_chunk(ds_sol, var_name, year, month, var_dir)
+                if success:
+                    completed += 1
+                    print(f"    {chunk_id} ✓ {format_bytes(out_file.stat().st_size)} in {format_time(time.time()-t1)}")
+                else:
+                    failed.append(chunk_id)
+            var_files = list(var_dir.glob("*.nc"))
+            print(f"    {var_name}: {len(var_files)} months, {format_bytes(sum(f.stat().st_size for f in var_files))}")
+        ds_sol.close()
 
     total_elapsed = time.time() - start_time
-    total_size = sum(
-        f.stat().st_size
-        for var in VARIABLES
-        for f in (RAW_DIR / var).glob("*.nc")
-        if f.exists()
-    )
+    all_dirs = [RAW_DIR / v for v in VARIABLES] + [RAW_DIR / lv["save_as"] for lv in LEVEL_VARIABLES] + [RAW_DIR / v for v in SOLAR_VARIABLES]
+    total_size = sum(f.stat().st_size for d in all_dirs for f in d.glob("*.nc") if f.exists())
 
     print(f"\n{'=' * 70}")
     print(f"  Done in {format_time(total_elapsed)}")
-    print(f"  Downloaded: {completed}/{total_chunks} chunks, {format_bytes(total_size)}")
+    print(f"  Downloaded: {completed} chunks, {format_bytes(total_size)}")
     if failed:
         print(f"  Failed: {len(failed)} chunks:")
         for f in failed:

@@ -1,5 +1,6 @@
 import type { Manifest } from "../../types";
-import Select from "./Select";
+import CustomSelect from "./CustomSelect";
+import { VARIABLE_GROUPS } from "../../lib/variableMetadata";
 
 interface Props {
   value: string;
@@ -9,10 +10,14 @@ interface Props {
 }
 
 export default function VariableSelect({ value, onChange, manifest, className }: Props) {
-  const options = Object.entries(manifest.variables).map(([key, info]) => ({
-    value: key,
-    label: info.label,
-  }));
+  const groups = VARIABLE_GROUPS
+    .map((g) => ({
+      label: g.label,
+      options: g.variables
+        .filter((v) => v in manifest.variables)
+        .map((v) => ({ value: v, label: manifest.variables[v].label })),
+    }))
+    .filter((g) => g.options.length > 0);
 
-  return <Select value={value} onChange={onChange} options={options} className={className} />;
+  return <CustomSelect value={value} onChange={onChange} groups={groups} className={className} minWidth="225px" />;
 }

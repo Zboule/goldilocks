@@ -21,6 +21,32 @@ export function useMultiPeriodTiles(
       return;
     }
 
+    // Fast sync path: if everything is cached, skip async entirely
+    let allCached = true;
+    const grouped = new Map<string, Float32Array[]>();
+    for (const req of requests) {
+      const key = `${req.variable}/${req.stat}`;
+      const tilesForReq: Float32Array[] = [];
+      for (const period of periods) {
+        const cached = getCached(req.variable, req.stat, period);
+        if (cached) {
+          tilesForReq.push(cached);
+        } else {
+          allCached = false;
+          break;
+        }
+      }
+      if (!allCached) break;
+      grouped.set(key, tilesForReq);
+    }
+
+    if (allCached) {
+      setTilesPerPeriod(grouped);
+      setLoading(false);
+      return;
+    }
+
+    // Async path: some tiles need fetching
     const version = ++versionRef.current;
     setLoading(true);
 
@@ -46,7 +72,7 @@ export function useMultiPeriodTiles(
     Promise.all(allPromises).then((results) => {
       if (version !== versionRef.current) return;
 
-      const grouped = new Map<string, Float32Array[]>();
+      const asyncGrouped = new Map<string, Float32Array[]>();
       for (const req of requests) {
         const key = `${req.variable}/${req.stat}`;
         const tilesForReq: Float32Array[] = [];
@@ -56,10 +82,10 @@ export function useMultiPeriodTiles(
           );
           if (match) tilesForReq.push(match.data);
         }
-        grouped.set(key, tilesForReq);
+        asyncGrouped.set(key, tilesForReq);
       }
 
-      setTilesPerPeriod(grouped);
+      setTilesPerPeriod(asyncGrouped);
       setLoading(false);
     });
   }, [requests, periods, manifestReady]);

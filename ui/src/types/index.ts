@@ -27,8 +27,9 @@ export interface Filter {
   id: string;
   variable: string;
   stat: string;
-  operator: "<" | ">";
+  operator: "<" | ">" | "between";
   value: number;
+  value2?: number;
 }
 
 export interface TileRequest {
@@ -61,4 +62,5 @@ export interface HoveredCell {
   index: number;
   data: CellStats[];
   filterResults: { filterId: string; variable: string; stat: string; label: string; passes: boolean }[];
+  loading?: boolean;
 }

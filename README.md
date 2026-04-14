@@ -38,20 +38,25 @@ pnpm dev
 - **Source:** ERA5 reanalysis from [WeatherBench2](https://weatherbench2.readthedocs.io/) (2013–2023)
 - **Resolution:** 0.25° (~28 km at the equator)
 - **Time periods:** 36 per year — Early/Mid/Late for each month (days 1–10, 11–20, 21–end)
-- **Variables:** Day temperature, Night temperature, Wind speed, Precipitation, Rainy days, Sunshine, Cloud cover
-- **Stats per cell per period:** Mean, Median, Min, Max, P10, P90
-- **Tile format:** uint16 quantized (~2 MB/tile raw, ~400 KB gzipped), ocean cells masked to NaN
+- **Variables (16):**
+  - *Temperature:* Day temperature, Night temperature, Apparent temperature day (BOM), Apparent temperature night (BOM), Diurnal range
+  - *Humidity:* Dew point, Relative humidity
+  - *Wind:* Wind speed
+  - *Precipitation:* Precipitation, Cloud cover, Solar radiation
+  - *Event frequencies (year-normalized):* Rainy days, Heavy rain days, Muggy days, Hot days, Windy days
+- **Stats per cell per period (7):** Mean, Median, Min, Max, P10, P90, Ystd (interannual standard deviation)
+- **Tile format:** uint8 land-only (~344 KB/tile raw, ~100 KB gzipped), ocean cells excluded via land index
 
 ## Regenerating tiles from source
 
-To rebuild the tile data from ERA5 (downloads ~300 GB of raw data):
+To rebuild the tile data from ERA5 (downloads ~420 GB of raw data):
 
 ```bash
 python -m venv .venv && .venv/bin/pip install -r data/requirements.txt
 
-.venv/bin/python data/download_era5_025.py       # download 0.25° raw ERA5 data (~300 GB)
-.venv/bin/python data/process_periods_025.py     # aggregate into 36-period stats (~6 GB)
-.venv/bin/python data/generate_tiles_025.py      # produce uint16 binary tiles (~3 GB)
+.venv/bin/python data/download_era5_025.py       # download 0.25° raw ERA5 data (~420 GB, 7 variables)
+.venv/bin/python data/process_periods_025.py     # aggregate into 36-period stats (~16 GB, 16 variables × 7 stats)
+.venv/bin/python data/generate_tiles_025.py      # produce uint8 land-only tiles (~130 MB gzipped)
 ```
 
 ## Uploading new tiles
@@ -61,8 +66,8 @@ After regenerating tiles, create a new release:
 ```bash
 tar -czf tiles-v2.2.1.tar.gz -C data tiles/
 gh release create v2.2.1 tiles-v2.2.1.tar.gz --repo Zboule/goldilocks \
-  --title "v2.2.1 – 0.25° 36-period uint16 tiles" \
-  --notes "0.25° resolution, 36 periods, uint16 encoded"
+  --title "v2.2.1 – 0.25° 36-period uint8 tiles" \
+  --notes "0.25° resolution, 36 periods, uint8 land-only, 16 variables, 7 stats"
 ```
 
 ## Project structure
@@ -72,7 +77,7 @@ goldilocks/
 ├── data/                           # Data pipeline (Python)
 │   ├── download_era5_025.py        # ERA5 0.25° data download
 │   ├── process_periods_025.py      # 36-period aggregation
-│   ├── generate_tiles_025.py       # uint16 binary tile generation
+│   ├── generate_tiles_025.py       # uint8 land-only binary tile generation
 │   ├── requirements.txt            # Python dependencies
 │   └── tiles/                      # Generated tiles (gitignored)
 ├── ui/                             # Web UI (React + TypeScript)

@@ -1,8 +1,8 @@
 import { useMemo, useRef } from "react";
 import type { Manifest, Filter, TileRequest } from "../types";
 import { useMultiPeriodTiles } from "./useMultiPeriodTiles";
-import { getFilterTileRequests } from "../lib/filterEngine";
-import { getColor, GRAY_COLOR } from "../lib/colorScale";
+import { evaluateFilter, getFilterTileRequests } from "../lib/filterEngine";
+import { getColor, GRAY_COLOR, FIXED_DISPLAY_RANGE, YSTD_DISPLAY_MAX } from "../lib/colorScale";
 import type { StaticCell } from "./useStaticGrid";
 
 function aggregateStat(stat: string, values: number[]): number {
@@ -51,23 +51,37 @@ export function useColorBuffer(
   const versionRef = useRef(0);
 
   const { colors, version } = useMemo(() => {
-    if (!manifest || !cells || loading || cells.length === 0 || periods.length === 0) {
+    if (!manifest || !cells || cells.length === 0 || periods.length === 0) {
       return { colors: null, version: versionRef.current };
     }
 
     const nPeriods = periods.length;
     const displayTiles = tilesPerPeriod.get(`${displayVariable}/${displayStat}`);
-    if (!displayTiles || displayTiles.length < nPeriods || displayTiles.some((t) => !t || t.length === 0)) {
-      return { colors: null, version: versionRef.current };
+    const tilesReady = displayTiles && displayTiles.length >= nPeriods && displayTiles.every((t) => t && t.length > 0);
+
+    if (loading || !tilesReady) {
+      const buf = new Uint8Array(cells.length * 4);
+      for (let ci = 0; ci < cells.length; ci++) {
+        const off = ci * 4;
+        buf[off] = GRAY_COLOR[0];
+        buf[off + 1] = GRAY_COLOR[1];
+        buf[off + 2] = GRAY_COLOR[2];
+        buf[off + 3] = GRAY_COLOR[3];
+      }
+      versionRef.current++;
+      return { colors: buf, version: versionRef.current };
     }
 
     const varInfo = manifest.variables[displayVariable];
+    const isYstd = displayStat === "ystd";
+    const fixedRange = FIXED_DISPLAY_RANGE[displayVariable];
+    const colorMin = isYstd ? 0 : (fixedRange?.[0] ?? varInfo.display_min);
+    const colorMax = isYstd ? (YSTD_DISPLAY_MAX[displayVariable] ?? 5) : (fixedRange?.[1] ?? varInfo.display_max);
     const buf = new Uint8Array(cells.length * 4);
 
     for (let ci = 0; ci < cells.length; ci++) {
       const gridIdx = cells[ci].index;
 
-      // Collect display values across all periods
       const displayValues: number[] = [];
       let anyNaN = false;
       for (let pi = 0; pi < nPeriods; pi++) {
@@ -78,7 +92,6 @@ export function useColorBuffer(
 
       if (anyNaN || displayValues.length === 0) continue;
 
-      // Check filters: ALL periods must pass ALL filters
       let allPeriodsPass = true;
       for (const f of filters) {
         const filterTiles = tilesPerPeriod.get(`${f.variable}/${f.stat}`);
@@ -86,16 +99,14 @@ export function useColorBuffer(
 
         for (let pi = 0; pi < nPeriods; pi++) {
           const v = filterTiles[pi]?.[gridIdx];
-          if (v === undefined || Number.isNaN(v)) { allPeriodsPass = false; break; }
-          const passes = f.operator === "<" ? v < f.value : v > f.value;
-          if (!passes) { allPeriodsPass = false; break; }
+          if (!evaluateFilter(f, v ?? null)) { allPeriodsPass = false; break; }
         }
         if (!allPeriodsPass) break;
       }
 
       const aggregatedValue = aggregateStat(displayStat, displayValues);
       const color = allPeriodsPass
-        ? getColor(displayVariable, aggregatedValue, varInfo.display_min, varInfo.display_max)
+        ? getColor(displayVariable, aggregatedValue, colorMin, colorMax, displayStat)
         : GRAY_COLOR;
 
       const off = ci * 4;

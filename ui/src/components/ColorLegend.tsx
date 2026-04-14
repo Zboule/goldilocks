@@ -2,14 +2,15 @@ import { getGradientCSS } from "../lib/colorScale";
 
 interface Props {
   variable: string;
+  stat?: string;
   min: number;
   max: number;
   units: string;
   filterCount: number;
 }
 
-export default function ColorLegend({ variable, min, max, units, filterCount }: Props) {
-  const gradient = getGradientCSS(variable, min, max);
+export default function ColorLegend({ variable, stat, min, max, units, filterCount }: Props) {
+  const gradient = getGradientCSS(variable, min, max, 20, stat);
 
   return (
     <div className="absolute bottom-4 left-2 md:left-4 z-10 rounded-lg bg-white/70 backdrop-blur-sm px-2.5 md:px-3 py-1.5 shadow-md max-w-[calc(100vw-1rem)]">

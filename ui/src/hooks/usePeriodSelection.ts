@@ -8,7 +8,9 @@ interface State {
 type Action =
   | { type: "CLICK"; period: number }
   | { type: "SET_ACTIVE"; period: number }
-  | { type: "INIT"; period: number };
+  | { type: "INIT"; period: number }
+  | { type: "LOCK_ALL"; periods: number[] }
+  | { type: "CLEAR_LOCKED" };
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
@@ -42,6 +44,15 @@ function reducer(state: State, action: Action): State {
       return { ...state, active: p };
     }
 
+    case "LOCK_ALL": {
+      return { locked: new Set(action.periods), active: null };
+    }
+
+    case "CLEAR_LOCKED": {
+      const first = state.active ?? (state.locked.size > 0 ? Math.min(...state.locked) : null);
+      return { locked: new Set(), active: first };
+    }
+
     default:
       return state;
   }
@@ -62,6 +73,8 @@ export function usePeriodSelection() {
   const clickPeriod = useCallback((p: number) => dispatch({ type: "CLICK", period: p }), []);
   const setActive = useCallback((p: number) => dispatch({ type: "SET_ACTIVE", period: p }), []);
   const init = useCallback((p: number) => dispatch({ type: "INIT", period: p }), []);
+  const lockAll = useCallback((periods: number[]) => dispatch({ type: "LOCK_ALL", periods }), []);
+  const clearLocked = useCallback(() => dispatch({ type: "CLEAR_LOCKED" }), []);
 
   return {
     lockedPeriods: state.locked,
@@ -70,5 +83,7 @@ export function usePeriodSelection() {
     clickPeriod,
     setActive,
     init,
+    lockAll,
+    clearLocked,
   };
 }

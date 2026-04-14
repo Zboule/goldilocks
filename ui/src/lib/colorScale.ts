@@ -25,20 +25,23 @@ function makeScaleFromStops(stops: number[][]): (t: number) => RGBA {
   };
 }
 
-// Temperature palette defined at fixed °C values
-// Each entry: [temperature, R, G, B]
+// Temperature palette aligned to comfort zones:
+// < 0 freezing (deep blue) → 0-10 cold (light blue) → 10-18 cool (teal/cyan)
+// → 18-25 comfortable (green) → 25-32 warm (yellow/orange) → 32-40 hot (red)
+// → > 40 extreme (dark maroon)
 const TEMP_COLOR_STOPS: [number, number, number, number][] = [
-  [-50, 8,   48,  107],
-  [-20, 33,  102, 172],
-  [ -5, 67,  147, 195],
-  [  5, 146, 197, 222],
-  [ 12, 100, 190, 130],
-  [ 17, 45,  160, 75],
-  [ 22, 120, 185, 50],
-  [ 27, 230, 180, 40],
-  [ 32, 214, 96,  77],
-  [ 38, 178, 24,  43],
-  [ 50, 103, 0,   31],
+  [-50, 8,   48, 107],   // deep blue
+  [-20, 33, 102, 172],   // medium blue
+  [  0, 67, 147, 195],   // freezing boundary — steel blue
+  [ 10, 130, 200, 220],  // cold/cool boundary — light cyan
+  [ 18, 60, 180,  90],   // cool/comfortable boundary — green
+  [ 22, 100, 195,  60],  // mid comfortable — bright green
+  [ 25, 180, 200,  50],  // comfortable/warm boundary — lime
+  [ 29, 240, 180,  40],  // warm — golden yellow
+  [ 32, 230, 120,  50],  // warm/hot boundary — orange
+  [ 36, 214,  70,  60],  // hot — red-orange
+  [ 40, 178,  24,  43],  // hot/extreme boundary — deep red
+  [ 50, 103,   0,  31],  // extreme — dark maroon
 ];
 
 // Purple -> Teal -> Yellow
@@ -60,15 +63,6 @@ const blues = makeScaleFromStops([
   [8, 48, 107],
 ]);
 
-// Dark -> Orange -> Yellow (sunshine)
-const ylOrBr = makeScaleFromStops([
-  [100, 80, 60],
-  [166, 115, 38],
-  [230, 171, 2],
-  [253, 212, 98],
-  [255, 247, 188],
-]);
-
 // White -> Dark grey
 const greys = makeScaleFromStops([
   [255, 255, 255],
@@ -78,12 +72,77 @@ const greys = makeScaleFromStops([
   [37, 37, 37],
 ]);
 
+// Blue-green diverging: dry blue -> comfortable green -> muggy red
+const dewPointScale = makeScaleFromStops([
+  [49, 130, 189],
+  [107, 174, 214],
+  [100, 190, 130],
+  [230, 180, 40],
+  [214, 96, 77],
+  [178, 24, 43],
+]);
+
+// Brown -> Teal (dry -> humid)
+const humidityScale = makeScaleFromStops([
+  [166, 115, 38],
+  [210, 180, 120],
+  [220, 220, 200],
+  [130, 190, 180],
+  [0, 130, 130],
+]);
+
+// Orange sequential: small range light -> large range dark
+const orangeSeq = makeScaleFromStops([
+  [255, 247, 220],
+  [253, 212, 158],
+  [240, 170, 80],
+  [214, 120, 40],
+  [170, 70, 10],
+]);
+
+// Dark -> Yellow (low -> high solar)
+const solarScale = makeScaleFromStops([
+  [50, 40, 60],
+  [100, 80, 120],
+  [180, 150, 50],
+  [240, 210, 40],
+  [255, 250, 150],
+]);
+
+// Volatility: white below normal, ramps purple above notable
+const purpleRamp = makeScaleFromStops([
+  [250, 245, 255],
+  [200, 170, 230],
+  [150, 100, 200],
+  [110, 50, 170],
+  [70, 10, 140],
+  [45, 0, 95],
+]);
+
+// "normal" = below this fraction of max → white; "notable" = above this → purple ramps
+const YSTD_NORMAL_FRAC = 0.4;
+
+function volatilityToColor(value: number, min: number, max: number): RGBA {
+  if (max <= min) return [255, 255, 255, 200];
+  const normalThreshold = min + (max - min) * YSTD_NORMAL_FRAC;
+  if (value <= normalThreshold) return [255, 255, 255, 200];
+  const t = (value - normalThreshold) / (max - normalThreshold);
+  return purpleRamp(Math.min(t, 1));
+}
+
 const PALETTES: Record<string, (t: number) => RGBA> = {
   wind_speed: viridis,
   precipitation: blues,
   rainy_days: blues,
-  sunshine: ylOrBr,
+  heavy_rain_days: blues,
+  muggy_days: blues,
+  hot_days: blues,
+  windy_days: blues,
   cloud_cover: greys,
+  dew_point: dewPointScale,
+  relative_humidity: humidityScale,
+  diurnal_range: orangeSeq,
+  solar_radiation: solarScale,
 };
 
 function temperatureToColor(value: number): RGBA {
@@ -108,13 +167,50 @@ function temperatureToColor(value: number): RGBA {
   return [103, 0, 31, 200];
 }
 
+const TEMP_VARIABLES = new Set([
+  "temperature_day", "temperature_night",
+  "apparent_temperature_day", "apparent_temperature_night",
+  "dew_point",
+]);
+
+export const FIXED_DISPLAY_RANGE: Record<string, [number, number]> = {
+  temperature_day: [-30, 45],
+  temperature_night: [-30, 45],
+  apparent_temperature_day: [-30, 45],
+  apparent_temperature_night: [-30, 45],
+  dew_point: [-30, 45],
+};
+
+export const YSTD_DISPLAY_MAX: Record<string, number> = {
+  temperature_day: 4,
+  temperature_night: 4,
+  apparent_temperature_day: 4,
+  apparent_temperature_night: 4,
+  dew_point: 4,
+  diurnal_range: 3,
+  relative_humidity: 12,
+  wind_speed: 2.5,
+  precipitation: 5,
+  cloud_cover: 0.10,
+  solar_radiation: 30,
+  rainy_days: 0.12,
+  heavy_rain_days: 0.10,
+  muggy_days: 0.12,
+  hot_days: 0.12,
+  windy_days: 0.12,
+};
+
 export function getColor(
   variable: string,
   value: number,
   min: number,
   max: number,
+  stat?: string,
 ): RGBA {
-  if (variable === "temperature_day" || variable === "temperature_night")
+  if (stat === "ystd") {
+    return volatilityToColor(value, min, max);
+  }
+  if (TEMP_VARIABLES.has(variable))
     return temperatureToColor(value);
   const palette = PALETTES[variable] ?? viridis;
   const t = max === min ? 0.5 : (value - min) / (max - min);
@@ -123,12 +219,15 @@ export function getColor(
 
 export const GRAY_COLOR: RGBA = [245, 245, 245, 160];
 
-export function getGradientCSS(variable: string, min?: number, max?: number, steps = 20): string {
+export function getGradientCSS(variable: string, min?: number, max?: number, steps = 20, stat?: string): string {
   const colors: string[] = [];
   for (let i = 0; i <= steps; i++) {
     const frac = i / steps;
     let r: number, g: number, b: number;
-    if ((variable === "temperature_day" || variable === "temperature_night") && min != null && max != null) {
+    if (stat === "ystd") {
+      const v = (min ?? 0) + frac * ((max ?? 5) - (min ?? 0));
+      [r, g, b] = volatilityToColor(v, min ?? 0, max ?? 5);
+    } else if (TEMP_VARIABLES.has(variable) && min != null && max != null) {
       const value = min + frac * (max - min);
       [r, g, b] = temperatureToColor(value);
     } else {

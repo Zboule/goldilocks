@@ -7,6 +7,8 @@ import { useColorBuffer } from "./hooks/useColorBuffer";
 import { usePreloadPeriods } from "./hooks/usePreloadPeriod";
 import { useHoveredCell } from "./hooks/useHoveredCell";
 import { setManifest } from "./lib/tileCache";
+import { FIXED_DISPLAY_RANGE, YSTD_DISPLAY_MAX } from "./lib/colorScale";
+import { useInflightPeriods } from "./hooks/useInflightPeriods";
 
 import ControlBar from "./components/controls/ControlBar";
 import FilterSidebar from "./components/controls/FilterSidebar";
@@ -18,7 +20,7 @@ export default function App() {
   const { manifest, loading: manifestLoading } = useManifest();
   const mapRef = useRef<MapViewHandle>(null);
 
-  const [displayVariable, setDisplayVariable] = useState("temperature_day");
+  const [displayVariable, setDisplayVariable] = useState("apparent_temperature_day");
   const [displayStat, setDisplayStat] = useState("mean");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mapReady, setMapReady] = useState(false);
@@ -30,6 +32,8 @@ export default function App() {
     clickPeriod,
     setActive,
     init: initPeriod,
+    lockAll,
+    clearLocked,
   } = usePeriodSelection();
 
   useEffect(() => {
@@ -45,6 +49,7 @@ export default function App() {
     useFilters();
 
   const staticCells = useStaticGrid(manifest);
+  const inflightPeriods = useInflightPeriods();
 
   const { colors, version, loading: colorsLoading } = useColorBuffer(
     manifest,
@@ -100,6 +105,9 @@ export default function App() {
         onDisplayStatChange={setDisplayStat}
         onClickPeriod={clickPeriod}
         onSetActivePeriod={setActive}
+        onLockAll={() => lockAll(manifest.periods)}
+        onClearLocked={clearLocked}
+        loadingPeriods={inflightPeriods}
         onToggleFilters={() => setSidebarOpen((v) => !v)}
       />
 
@@ -123,12 +131,13 @@ export default function App() {
             onReady={() => setMapReady(true)}
           />
 
-          <CellTooltip hoveredCell={hoveredCell} />
+          <CellTooltip hoveredCell={hoveredCell} manifest={manifest} />
 
           <ColorLegend
             variable={displayVariable}
-            min={varInfo.display_min}
-            max={varInfo.display_max}
+            stat={displayStat}
+            min={displayStat === "ystd" ? 0 : (FIXED_DISPLAY_RANGE[displayVariable]?.[0] ?? varInfo.display_min)}
+            max={displayStat === "ystd" ? (YSTD_DISPLAY_MAX[displayVariable] ?? 5) : (FIXED_DISPLAY_RANGE[displayVariable]?.[1] ?? varInfo.display_max)}
             units={varInfo.units}
             filterCount={filters.length}
           />

@@ -1,4 +1,4 @@
-import Select from "./Select";
+import CustomSelect from "./CustomSelect";
 
 const STAT_LABELS: Record<string, string> = {
   mean: "Mean",
@@ -7,6 +7,7 @@ const STAT_LABELS: Record<string, string> = {
   max: "Max",
   p10: "P10",
   p90: "P90",
+  ystd: "Year Std",
 };
 
 interface Props {
@@ -19,5 +20,5 @@ interface Props {
 export default function StatSelect({ value, onChange, stats, className }: Props) {
   const options = stats.map((s) => ({ value: s, label: STAT_LABELS[s] ?? s }));
 
-  return <Select value={value} onChange={onChange} options={options} className={className} />;
+  return <CustomSelect value={value} onChange={onChange} options={options} className={className} minWidth="80px" />;
 }

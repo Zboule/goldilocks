@@ -36,16 +36,25 @@ NATURAL_EARTH_DIR = Path("data/natural_earth")
 LAND_MASK_CACHE = NATURAL_EARTH_DIR / "land_mask_025.npy"
 
 VARIABLES = {
-    "temperature_day":   {"file": "temperature_day_periods.nc",   "units": "°C",       "label": "Day Temperature"},
-    "temperature_night": {"file": "temperature_night_periods.nc", "units": "°C",       "label": "Night Temperature"},
-    "wind_speed":        {"file": "wind_speed_periods.nc",        "units": "m/s",      "label": "Wind Speed"},
-    "precipitation":     {"file": "precipitation_periods.nc",     "units": "mm/day",   "label": "Precipitation"},
-    "rainy_days":        {"file": "rainy_days_periods.nc",        "units": "fraction", "label": "Rainy Days"},
-    "sunshine":          {"file": "sunshine_periods.nc",          "units": "fraction", "label": "Sunshine"},
-    "cloud_cover":       {"file": "cloud_cover_periods.nc",       "units": "fraction", "label": "Cloud Cover"},
+    "temperature_day":            {"file": "temperature_day_periods.nc",            "units": "°C",       "label": "Day Temperature"},
+    "temperature_night":          {"file": "temperature_night_periods.nc",          "units": "°C",       "label": "Night Temperature"},
+    "apparent_temperature_day":   {"file": "apparent_temperature_day_periods.nc",   "units": "°C",       "label": "Apparent Temp Day (BOM)"},
+    "apparent_temperature_night": {"file": "apparent_temperature_night_periods.nc", "units": "°C",       "label": "Apparent Temp Night (BOM)"},
+    "dew_point":                  {"file": "dew_point_periods.nc",                  "units": "°C",       "label": "Dew Point"},
+    "relative_humidity":          {"file": "relative_humidity_periods.nc",          "units": "%",        "label": "Relative Humidity"},
+    "diurnal_range":              {"file": "diurnal_range_periods.nc",              "units": "°C",       "label": "Diurnal Range"},
+    "wind_speed":                 {"file": "wind_speed_periods.nc",                 "units": "m/s",      "label": "Wind Speed"},
+    "precipitation":              {"file": "precipitation_periods.nc",              "units": "mm/day",   "label": "Precipitation"},
+    "rainy_days":                 {"file": "rainy_days_periods.nc",                 "units": "fraction", "label": "Rainy Days"},
+    "heavy_rain_days":            {"file": "heavy_rain_days_periods.nc",            "units": "fraction", "label": "Heavy Rain Days"},
+    "muggy_days":                 {"file": "muggy_days_periods.nc",                 "units": "fraction", "label": "Muggy Days"},
+    "hot_days":                   {"file": "hot_days_periods.nc",                   "units": "fraction", "label": "Hot Days"},
+    "windy_days":                 {"file": "windy_days_periods.nc",                 "units": "fraction", "label": "Windy Days"},
+    "solar_radiation":            {"file": "solar_radiation_periods.nc",            "units": "W/m²",     "label": "Solar Insolation (TOA)"},
+    "cloud_cover":                {"file": "cloud_cover_periods.nc",                "units": "fraction", "label": "Cloud Cover"},
 }
 
-STATS = ["mean", "median", "min", "max", "p10", "p90"]
+STATS = ["mean", "median", "min", "max", "p10", "p90", "ystd"]
 
 GRID_WIDTH = 1440
 GRID_HEIGHT = 721
@@ -136,20 +145,18 @@ def _load_shapefile_geometries(shp_path: Path) -> list:
                     end = parts[r + 1] if r + 1 < num_parts else num_points
                     rings.append(points[start:end])
 
-                # First ring is exterior, rest are holes
-                if len(rings) == 1:
-                    geojson = {"type": "Polygon", "coordinates": [rings[0]]}
-                else:
-                    geojson = {"type": "Polygon", "coordinates": rings}
-
-                try:
-                    geom = shape(geojson)
-                    if geom.is_valid:
-                        geometries.append(geom)
-                    else:
-                        geometries.append(geom.buffer(0))
-                except Exception:
-                    pass
+                # Each ring may be a separate land mass (multi-part polygon).
+                # Treat every ring as its own polygon -- safe for land masks.
+                from shapely.geometry import Polygon as ShapelyPolygon
+                for ring in rings:
+                    try:
+                        poly = ShapelyPolygon(ring)
+                        if not poly.is_valid:
+                            poly = poly.buffer(0)
+                        if not poly.is_empty and poly.area > 0:
+                            geometries.append(poly)
+                    except Exception:
+                        pass
 
     return geometries
 
@@ -250,12 +257,15 @@ def main():
 
     TILES_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Write land_index.bin (Uint32Array)
-    land_index.tofile(TILES_DIR / "land_index.bin")
-    print(f"  Saved land_index.bin ({(TILES_DIR / 'land_index.bin').stat().st_size / 1024:.0f} KB)")
-
-    # Write land_mask.bin (Float32, full grid) for legacy compat
-    land_mask.astype(np.float32).tofile(TILES_DIR / "land_mask.bin")
+    # Write land_bitmap.bin (1 bit per grid cell, ~127 KB)
+    grid_size = GRID_HEIGHT * GRID_WIDTH
+    bitmap = np.zeros(int(np.ceil(grid_size / 8)), dtype=np.uint8)
+    flat_mask = land_mask.ravel()
+    for i in range(grid_size):
+        if flat_mask[i]:
+            bitmap[i >> 3] |= (1 << (i & 7))
+    bitmap.tofile(TILES_DIR / "land_bitmap.bin")
+    print(f"  Saved land_bitmap.bin ({(TILES_DIR / 'land_bitmap.bin').stat().st_size / 1024:.0f} KB)")
 
     manifest = {
         "grid": {"width": GRID_WIDTH, "height": GRID_HEIGHT, "resolution_deg": RESOLUTION_DEG},
@@ -277,6 +287,9 @@ def main():
     
     for var_idx, (var_name, var_cfg) in enumerate(VARIABLES.items()):
         nc_path = PROCESSED_DIR / var_cfg["file"]
+        if not nc_path.exists():
+            print(f"\n  {var_name}: SKIP — {nc_path.name} not found (run process_periods_025.py first)")
+            continue
         print(f"\n  {var_name}: reading {nc_path.name}...")
         ds = xr.open_dataset(nc_path)
 
@@ -289,12 +302,18 @@ def main():
         if cell_data is None:
             cell_data = np.zeros((n_land, len(var_order), len(STATS), len(periods)), dtype=np.uint8)
 
+        available_stats = [s for s in STATS if s in ds]
+        if not available_stats:
+            print(f"    WARNING: no stats found in {nc_path.name}, skipping")
+            ds.close()
+            continue
+
         # First pass: find global min/max across all stats and periods (land only)
         var_global_min = float("inf")
         var_global_max = float("-inf")
         mean_values_for_range = []
 
-        for stat in STATS:
+        for stat in available_stats:
             stat_data = ds[stat].values  # (period, lat/lon...)
 
             for pi in range(len(periods)):
@@ -309,6 +328,11 @@ def main():
                     if stat == "mean":
                         mean_values_for_range.extend(valid.tolist())
 
+        if len(mean_values_for_range) == 0:
+            print(f"    WARNING: no valid mean data for {var_name}, skipping")
+            ds.close()
+            continue
+
         enc_range = var_global_max - var_global_min
         enc_min = var_global_min - enc_range * 0.01
         enc_max = var_global_max + enc_range * 0.01
@@ -318,8 +342,10 @@ def main():
         display_max = float(np.percentile(all_means, 98))
 
         # Second pass: encode and write land-only uint8 tiles
-        for stat in STATS:
+        stat_index_map = {s: i for i, s in enumerate(STATS)}
+        for stat in available_stats:
             stat_data = ds[stat].values
+            global_stat_idx = stat_index_map[stat]
 
             for pi, period_num in enumerate(periods):
                 grid = stat_data[pi].copy()
@@ -330,8 +356,8 @@ def main():
                 nan_mask = np.isnan(land_vals)
                 encoded = encode_uint8(np.nan_to_num(land_vals, nan=enc_min), enc_min, enc_max)
                 encoded[nan_mask] = 0
-                
-                cell_data[:, var_idx, stat_idx, pi] = encoded
+
+                cell_data[:, var_idx, global_stat_idx, pi] = encoded
 
                 out_path = TILES_DIR / var_name / stat / f"period{period_num:02d}.bin"
                 out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -349,25 +375,32 @@ def main():
             "encode_max": round(enc_max, 4),
         }
 
-        print(f"    {var_name}: {len(STATS) * len(periods)} tiles, "
+        print(f"    {var_name}: {len(available_stats) * len(periods)} tiles, "
               f"range=[{var_global_min:.2f}, {var_global_max:.2f}], "
               f"encode=[{enc_min:.2f}, {enc_max:.2f}] {var_cfg['units']}")
         ds.close()
 
-    print("\n  Writing cell chunks for tooltips...")
+    print("\n  Writing per-period cell chunks for tooltips...")
     import math
     chunk_size = manifest["chunk_size"]
     chunks_dir = TILES_DIR / "cell_chunks"
-    chunks_dir.mkdir(parents=True, exist_ok=True)
     num_chunks = math.ceil(n_land / chunk_size)
-    for c in range(num_chunks):
-        start = c * chunk_size
-        end = min(n_land, start + chunk_size)
-        chunk_slice = cell_data[start:end, :, :, :]
-        chunk_slice.tofile(chunks_dir / f"chunk_{c:04d}.bin")
-        total_files += 1
-    
-    print(f"  Wrote {num_chunks} chunk files")
+    n_periods = cell_data.shape[3] if cell_data is not None else 0
+    chunk_files_written = 0
+
+    for pi in range(n_periods):
+        period_dir = chunks_dir / f"period{pi + 1:02d}"
+        period_dir.mkdir(parents=True, exist_ok=True)
+        for c in range(num_chunks):
+            start = c * chunk_size
+            end = min(n_land, start + chunk_size)
+            # (cells_in_chunk, n_vars, n_stats) for this one period
+            chunk_slice = cell_data[start:end, :, :, pi]
+            chunk_slice.tofile(period_dir / f"chunk_{c:04d}.bin")
+            chunk_files_written += 1
+
+    total_files += chunk_files_written
+    print(f"  Wrote {chunk_files_written} chunk files ({n_periods} periods × {num_chunks} chunks, ~{chunk_size * len(var_order) * len(STATS) / 1024:.0f} KB each)")
 
     manifest_path = TILES_DIR / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2))

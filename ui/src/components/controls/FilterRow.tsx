@@ -13,6 +13,7 @@ interface Props {
 const OPERATOR_OPTIONS = [
   { value: "<", label: "<" },
   { value: ">", label: ">" },
+  { value: "between", label: "between" },
 ];
 
 export default function FilterRow({ filter, manifest, onChange, onRemove }: Props) {
@@ -42,9 +43,9 @@ export default function FilterRow({ filter, manifest, onChange, onRemove }: Prop
         />
         <Select
           value={filter.operator}
-          onChange={(v) => onChange({ operator: v as "<" | ">" })}
+          onChange={(v) => onChange({ operator: v as "<" | ">" | "between" })}
           options={OPERATOR_OPTIONS}
-          className="text-xs w-12 text-center"
+          className="text-xs w-16 text-center"
         />
         <input
           type="number"
@@ -52,6 +53,17 @@ export default function FilterRow({ filter, manifest, onChange, onRemove }: Prop
           onChange={(e) => onChange({ value: parseFloat(e.target.value) || 0 })}
           className="w-14 rounded border border-gray-300 bg-white px-1.5 py-0.5 text-xs tabular-nums text-center"
         />
+        {filter.operator === "between" && (
+          <>
+            <span className="text-[10px] text-gray-400">–</span>
+            <input
+              type="number"
+              value={filter.value2 ?? 0}
+              onChange={(e) => onChange({ value2: parseFloat(e.target.value) || 0 })}
+              className="w-14 rounded border border-gray-300 bg-white px-1.5 py-0.5 text-xs tabular-nums text-center"
+            />
+          </>
+        )}
         <span className="text-[10px] text-gray-400">{varInfo?.units ?? ""}</span>
       </div>
     </div>

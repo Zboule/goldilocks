@@ -5,6 +5,8 @@ export function evaluateFilter(
   value: number | null,
 ): boolean {
   if (value === null || Number.isNaN(value)) return false;
+  if (filter.operator === "between")
+    return value >= filter.value && value <= (filter.value2 ?? filter.value);
   return filter.operator === "<" ? value < filter.value : value > filter.value;
 }
 
@@ -40,5 +42,7 @@ export function describeFilter(
   statLabel: string,
   units: string,
 ): string {
+  if (filter.operator === "between")
+    return `${variableLabel} ${statLabel} ${filter.value}–${filter.value2 ?? "?"} ${units}`;
   return `${variableLabel} ${statLabel} ${filter.operator} ${filter.value} ${units}`;
 }

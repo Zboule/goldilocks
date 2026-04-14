@@ -11,6 +11,9 @@ interface Props {
   onTogglePlay: () => void;
   onClickPeriod: (p: number) => void;
   onSetActive: (p: number) => void;
+  onLockAll: () => void;
+  onClearLocked: () => void;
+  loadingPeriods: Set<number>;
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -26,6 +29,9 @@ export default function PeriodSlider({
   onTogglePlay,
   onClickPeriod,
   onSetActive,
+  onLockAll,
+  onClearLocked,
+  loadingPeriods,
 }: Props) {
   const activePeriodRef = useRef(activePeriod);
   activePeriodRef.current = activePeriod;
@@ -62,6 +68,8 @@ export default function PeriodSlider({
     prevActivePeriodRef.current = activePeriod;
   }, [activePeriod, periods]);
 
+  const hasLocked = lockedPeriods.size > 0;
+
   const label =
     selectedPeriods.length === 1
       ? periodToLabel(selectedPeriods[0], periodLabels)
@@ -72,6 +80,14 @@ export default function PeriodSlider({
     for (let s = 0; s < 3; s++) {
       const p = periods[monthIdx * 3 + s];
       if (p !== undefined && (lockedPeriods.has(p) || p === activePeriod)) return true;
+    }
+    return false;
+  };
+
+  const monthHasLoading = (monthIdx: number) => {
+    for (let s = 0; s < 3; s++) {
+      const p = periods[monthIdx * 3 + s];
+      if (p !== undefined && loadingPeriods.has(p)) return true;
     }
     return false;
   };
@@ -114,6 +130,7 @@ export default function PeriodSlider({
                       if (p === undefined) return null;
                       const isLocked = lockedPeriods.has(p);
                       const isActive = p === activePeriod;
+                      const isLoading = loadingPeriods.has(p);
                       return (
                         <button
                           key={p}
@@ -127,10 +144,11 @@ export default function PeriodSlider({
                                 ? "bg-blue-500 text-white shadow-sm"
                                 : "bg-white text-gray-500 hover:bg-blue-100"
                             }
+                            ${isLoading ? "animate-pulse" : ""}
                           `}
                         >
                           {PERIOD_POS[s]}
-                          {isLocked && (
+                          {isLocked && !isLoading && (
                             <div className="absolute inset-x-0 bottom-0 flex justify-center">
                               <div className="w-1 h-1 rounded-full bg-white/80" />
                             </div>
@@ -147,12 +165,12 @@ export default function PeriodSlider({
             }
 
             // Collapsed month: one tappable cell
+            const isMonthLoading = monthHasLoading(mi);
             return (
               <div key={m} className="flex flex-col flex-1 gap-px">
                 <button
                   onClick={() => {
                     setExpandedMonth(mi);
-                    // Select the middle period of the month by default
                     const midP = periods[mi * 3 + 1];
                     if (midP !== undefined) {
                       onSetActive(midP);
@@ -164,6 +182,7 @@ export default function PeriodSlider({
                       ? "bg-blue-500 shadow-sm"
                       : "bg-gray-200 hover:bg-blue-200"
                     }
+                    ${isMonthLoading ? "animate-pulse" : ""}
                   `}
                   title={m}
                 >
@@ -198,6 +217,7 @@ export default function PeriodSlider({
           {periods.map((p, i) => {
             const isLocked = lockedPeriods.has(p);
             const isActive = p === activePeriod;
+            const isLoading = loadingPeriods.has(p);
             const isMonthStart = i > 0 && i % 3 === 0;
             return (
               <button
@@ -213,11 +233,17 @@ export default function PeriodSlider({
                       ? "bg-blue-500 shadow-sm"
                       : "bg-gray-200 hover:bg-blue-300"
                   }
+                  ${isLoading ? "animate-pulse" : ""}
                 `}
               >
-                {isLocked && (
+                {isLocked && !isLoading && (
                   <div className="absolute inset-x-0 bottom-0.5 flex justify-center">
                     <div className="w-1 h-1 rounded-full bg-white/80" />
+                  </div>
+                )}
+                {isLoading && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-1.5 h-1.5 rounded-full bg-white/90 animate-ping" />
                   </div>
                 )}
               </button>
@@ -233,10 +259,25 @@ export default function PeriodSlider({
         </div>
       </div>
 
-      {/* Period label — hidden on mobile */}
-      <span className="hidden md:inline w-16 text-left text-xs text-gray-600 shrink-0 whitespace-nowrap font-medium ml-1">
-        {label}
-      </span>
+      <button
+        onClick={hasLocked ? onClearLocked : onLockAll}
+        className="shrink-0 ml-1 w-8 h-8 md:w-7 md:h-7 flex items-center justify-center rounded border border-gray-300 bg-white hover:bg-gray-50 cursor-pointer transition-colors"
+        title={hasLocked ? "Clear all locked periods" : "Select all periods"}
+      >
+        {hasLocked ? (
+          <svg className="w-3.5 h-3.5 text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        ) : (
+          <svg className="w-3.5 h-3.5 text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="7" height="7" />
+            <rect x="14" y="3" width="7" height="7" />
+            <rect x="3" y="14" width="7" height="7" />
+            <rect x="14" y="14" width="7" height="7" />
+          </svg>
+        )}
+      </button>
     </div>
   );
 }

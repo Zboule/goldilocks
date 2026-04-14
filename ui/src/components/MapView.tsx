@@ -86,7 +86,7 @@ const MapView = forwardRef<MapViewHandle, Props>(({ onHover, onReady }, ref) => 
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: "https://tiles.openfreemap.org/styles/liberty",
+      style: "https://tiles.openfreemap.org/styles/positron",
       center: [20, 20],
       zoom: 2,
       attributionControl: false,
