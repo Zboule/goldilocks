@@ -48,7 +48,7 @@ VARIABLES = {
     "rainy_hours":                {"file": "rainy_hours_periods.nc",               "units": "fraction", "label": "Rain Hours (All Day)"},
     "rainy_hours_day":            {"file": "rainy_hours_day_periods.nc",           "units": "fraction", "label": "Rain Hours (Daytime)"},
     "rainy_hours_night":          {"file": "rainy_hours_night_periods.nc",         "units": "fraction", "label": "Rain Hours (Nighttime)"},
-    "solar_radiation":            {"file": "solar_radiation_periods.nc",            "units": "W/m²",     "label": "Solar Insolation (TOA)"},
+    "solar_radiation":            {"file": "solar_radiation_periods.nc",            "units": "W/m²",     "label": "Sunshine Strength"},
     "cloud_cover":                {"file": "cloud_cover_periods.nc",                "units": "fraction", "label": "Cloud Cover"},
     "utci_day":                   {"file": "utci_day_periods.nc",                   "units": "°C",       "label": "Feels Like – Day (UTCI)"},
     "utci_night":                 {"file": "utci_night_periods.nc",                 "units": "°C",       "label": "Feels Like – Night (UTCI)"},
@@ -208,7 +208,46 @@ def _rasterize_land_mask() -> np.ndarray:
 
     elapsed = time.time() - t0
     print(f"  Rasterization done in {elapsed:.1f}s")
-    print(f"  Land cells: {mask.sum():,} / {mask.size:,}")
+    print(f"  Land cells (raw): {mask.sum():,} / {mask.size:,}")
+
+    # Patch: the ring parser treats shapefile holes (inland seas) as land.
+    # Use pyshp + unary_union for a correct land geometry, then clear cells
+    # whose center is not actually on land.
+    try:
+        import shapefile as pyshp
+        from shapely.geometry import shape as shp_shape, Point
+        from shapely.ops import unary_union as shp_union
+
+        correct_polys = []
+        for name, url in NATURAL_EARTH_URLS.items():
+            shp_path = _download_and_extract_shapefile(name, url)
+            sf = pyshp.Reader(str(shp_path))
+            for s in sf.shapes():
+                try:
+                    g = shp_shape(s.__geo_interface__)
+                    correct_polys.append(g if g.is_valid else g.buffer(0))
+                except Exception:
+                    pass
+        correct_land = shp_union(correct_polys)
+
+        cleared = 0
+        for ilat in range(GRID_HEIGHT):
+            lat = 90.0 - ilat * RESOLUTION_DEG
+            for ilon in range(GRID_WIDTH):
+                if not mask[ilat, ilon]:
+                    continue
+                lon = ilon * RESOLUTION_DEG
+                lon_ne = lon - 360 if lon > 180 else lon
+                if not correct_land.contains(Point(lon_ne, lat)):
+                    cell = box(lon_ne - half, lat - half, lon_ne + half, lat + half)
+                    if not correct_land.intersects(cell):
+                        mask[ilat, ilon] = False
+                        cleared += 1
+        print(f"  Hole patch: cleared {cleared} inland-water cells")
+    except Exception as e:
+        print(f"  Warning: hole patch skipped ({e})")
+
+    print(f"  Land cells (final): {mask.sum():,} / {mask.size:,}")
     return mask
 
 

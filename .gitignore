@@ -6,6 +6,5 @@ node_modules
 logs/
 *.tar.gz
 dist
-.cursor
 *.tsbuildinfo
 data/natural_earth

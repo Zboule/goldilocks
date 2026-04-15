@@ -292,7 +292,8 @@ export default function CellTooltip({ hoveredCell, manifest, pinned, onPin, onUn
                     <Fragment key={varKey}>
                       <div className="text-gray-600 font-medium pr-1 whitespace-nowrap overflow-hidden text-ellipsis">
                         {varData.label}
-                        <span className="text-gray-400 font-normal text-[9px] sm:text-[10px] ml-0.5">
+                        {" "}
+                        <span className="text-gray-400 font-normal text-[9px] sm:text-[10px]">
                           {varData.units}
                         </span>
                       </div>

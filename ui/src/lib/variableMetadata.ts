@@ -274,19 +274,19 @@ export const VARIABLE_DETAILS: Record<string, VariableDetail> = {
   },
   solar_radiation: {
     id: "solar_radiation",
-    source: "ERA5 reanalysis via WeatherBench2 (2013–2021, 9 years — older dataset)",
+    source: "ERA5 reanalysis via WeatherBench2 (2013–2021, 9 years)",
     rawVariable: "toa_incident_solar_radiation_6hr (J/m², top-of-atmosphere)",
     derivation:
-      "Top-of-atmosphere incoming solar energy, converted from J/m² to W/m² by dividing by 21600 (6 hours in seconds). Captures latitude and seasonal effects but not cloud absorption. Daily mean of 4 six-hourly values.",
-    temporalAgg: "36 periods, daily mean radiation pooled across 9 years (dataset ends 2021).",
+      "How much sunlight energy reaches the top of the atmosphere above each location. Higher values mean longer, stronger sunshine (depends on latitude and season). Does not account for clouds — combine with Cloud Cover for a full picture.",
+    temporalAgg: "36 periods, daily mean pooled across 9 years.",
     stats:
-      "Pooled stats + Year Std. Values represent clear-sky solar potential — actual surface radiation is lower due to clouds (see cloud cover).",
+      "Pooled stats + Year Std. Higher = more potential sunshine. Actual ground-level sunshine depends on cloud cover.",
     ranges: [
-      { range: "< 50 W/m²", label: "Very low — polar winter", value: 25 },
-      { range: "50–150 W/m²", label: "Low — high latitudes / winter", value: 100 },
-      { range: "150–250 W/m²", label: "Moderate", value: 200 },
-      { range: "250–350 W/m²", label: "High — subtropical / summer", value: 300 },
-      { range: "> 350 W/m²", label: "Very high — tropical / desert", value: 400 },
+      { range: "< 50 W/m²", label: "Very weak — polar winter, little daylight", value: 25 },
+      { range: "50–150 W/m²", label: "Weak — short days or high latitude", value: 100 },
+      { range: "150–250 W/m²", label: "Moderate — typical mid-latitude", value: 200 },
+      { range: "250–350 W/m²", label: "Strong — long sunny days", value: 300 },
+      { range: "> 350 W/m²", label: "Very strong — tropical / desert sun", value: 400 },
     ],
   },
   rainy_hours: {

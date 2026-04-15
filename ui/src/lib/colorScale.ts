@@ -63,6 +63,16 @@ const blues = makeScaleFromStops([
   [8, 48, 107],
 ]);
 
+// White -> Purple (wind)
+const windScale = makeScaleFromStops([
+  [250, 245, 255],
+  [203, 180, 228],
+  [158, 120, 195],
+  [118, 68, 170],
+  [84, 39, 143],
+  [63, 0, 110],
+]);
+
 // White -> Dark grey
 const greys = makeScaleFromStops([
   [255, 255, 255],
@@ -138,7 +148,7 @@ const SAFETY_COLORS: Record<number, RGBA> = {
 };
 
 const PALETTES: Record<string, (t: number) => RGBA> = {
-  wind_speed: viridis,
+  wind_speed: windScale,
   precipitation: blues,
   rainy_hours: blues,
   rainy_hours_day: blues,
