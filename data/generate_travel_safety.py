@@ -38,7 +38,7 @@ ADVISORY_CSV = Path("data/us_travel_advisories.csv")
 LAND_MASK_CACHE = NATURAL_EARTH_DIR / "land_mask_025.npy"
 
 GRID_WIDTH = 1440
-GRID_HEIGHT = 721
+GRID_HEIGHT = 601
 RESOLUTION_DEG = 0.25
 
 COUNTRIES_URL = "https://naturalearth.s3.amazonaws.com/10m_cultural/ne_10m_admin_0_countries.zip"
@@ -49,6 +49,27 @@ STATS = ["mean", "median", "min", "max", "p10", "p90", "ystd"]
 # Shapefile ISO codes that differ from standard ISO A2
 SHAPEFILE_ISO_FIXES = {
     "CN-TW": "TW",  # Natural Earth marks Taiwan as CN-TW
+}
+
+# Territories without their own advisory inherit from the administering country
+TERRITORY_FALLBACKS = {
+    "EH": "MA",  # Western Sahara -> Morocco
+    "AX": "FI",  # Åland -> Finland
+    "FO": "DK",  # Faroe Islands -> Denmark
+    "GG": "GB",  # Guernsey -> UK
+    "JE": "GB",  # Jersey -> UK
+    "IM": "GB",  # Isle of Man -> UK
+    "GS": "GB",  # South Georgia -> UK
+    "SH": "GB",  # Saint Helena -> UK
+    "IO": "GB",  # British Indian Ocean Territory -> UK
+    "PN": "GB",  # Pitcairn Islands -> UK
+    "NF": "AU",  # Norfolk Island -> Australia
+    "HM": "AU",  # Heard & McDonald Islands -> Australia
+    "TF": "FR",  # French Southern Lands -> France
+    "WF": "FR",  # Wallis and Futuna -> France
+    "UM": "US",  # US Minor Outlying Islands -> US
+    "SP": "AR",  # Southern Patagonian Ice Field -> Argentina
+    "KA": "IN",  # Siachen Glacier -> India
 }
 
 US_LEVEL_LABELS = {
@@ -161,14 +182,19 @@ def fetch_canada_advisories() -> dict:
 
 
 def compute_composite(us_adv, de_adv, ca_adv, iso):
-    """Compute Goldilocks composite level: worst (max) of available sources."""
+    """Compute Goldilocks composite level: worst (max) of available sources.
+    Falls back to the administering country for territories without data."""
+    lookup_iso = iso
     levels = []
-    if iso in us_adv and us_adv[iso]["level"] > 0:
-        levels.append(us_adv[iso]["level"])
-    if iso in de_adv and de_adv[iso]["level"] > 0:
-        levels.append(de_adv[iso]["level"])
-    if iso in ca_adv and ca_adv[iso]["level"] > 0:
-        levels.append(ca_adv[iso]["level"])
+    for adv in (us_adv, de_adv, ca_adv):
+        if lookup_iso in adv and adv[lookup_iso]["level"] > 0:
+            levels.append(adv[lookup_iso]["level"])
+
+    if not levels and iso in TERRITORY_FALLBACKS:
+        lookup_iso = TERRITORY_FALLBACKS[iso]
+        for adv in (us_adv, de_adv, ca_adv):
+            if lookup_iso in adv and adv[lookup_iso]["level"] > 0:
+                levels.append(adv[lookup_iso]["level"])
 
     if not levels:
         return 0
@@ -377,23 +403,26 @@ def main():
             "sources": {},
         }
 
-        if iso in us_adv:
+        # Use territory fallback for sources if this ISO has no direct data
+        src_iso = iso if any(iso in adv for adv in (us_adv, de_adv, ca_adv)) else TERRITORY_FALLBACKS.get(iso, iso)
+
+        if src_iso in us_adv:
             entry["sources"]["us"] = {
-                "level": us_adv[iso]["level"],
-                "label": us_adv[iso]["label"],
-                "url": us_adv[iso]["url"],
+                "level": us_adv[src_iso]["level"],
+                "label": us_adv[src_iso]["label"],
+                "url": us_adv[src_iso]["url"],
             }
-        if iso in de_adv:
+        if src_iso in de_adv:
             entry["sources"]["de"] = {
-                "level": de_adv[iso]["level"],
-                "label": de_adv[iso]["label"],
-                "url": de_adv[iso]["url"],
+                "level": de_adv[src_iso]["level"],
+                "label": de_adv[src_iso]["label"],
+                "url": de_adv[src_iso]["url"],
             }
-        if iso in ca_adv:
+        if src_iso in ca_adv:
             entry["sources"]["ca"] = {
-                "level": ca_adv[iso]["level"],
-                "label": ca_adv[iso]["label"],
-                "url": ca_adv[iso]["url"],
+                "level": ca_adv[src_iso]["level"],
+                "label": ca_adv[src_iso]["label"],
+                "url": ca_adv[src_iso]["url"],
             }
 
         country_lookup.append(entry)

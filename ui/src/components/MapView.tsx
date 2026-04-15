@@ -131,12 +131,50 @@ const MapView = forwardRef<MapViewHandle, Props>(({ onHover, onClick, onReady },
         const firstSymbol = style.layers.find((l: { type: string }) => l.type === "symbol");
         if (firstSymbol) firstLabelLayerRef.current = firstSymbol.id;
 
+        const MIN_LAT = -62;
+        const MAX_LAT = 85;
+
+        const latToMercY = (lat: number) =>
+          0.5 - (0.25 * Math.log((1 + Math.sin(lat * Math.PI / 180)) / (1 - Math.sin(lat * Math.PI / 180)))) / Math.PI;
+
+        const mercYToLat = (y: number) =>
+          (360 / Math.PI) * Math.atan(Math.exp((0.5 - y) * 2 * Math.PI)) - 90;
+
         const map = new maplibregl.Map({
           container: containerRef.current!,
           style,
           center: [20, 20],
           zoom: 2,
           attributionControl: false,
+          transformConstrain: (lngLat, zoom) => {
+            const viewportH = containerRef.current?.clientHeight ?? 600;
+
+            const topY = latToMercY(MAX_LAT);
+            const botY = latToMercY(MIN_LAT);
+            const boundsSpan = botY - topY;
+
+            const minZoomForBounds = Math.log2(viewportH / (boundsSpan * 512));
+            const clampedZoom = Math.max(zoom, minZoomForBounds);
+
+            const worldSize = 512 * Math.pow(2, clampedZoom);
+            const mercOffset = (viewportH / 2) / worldSize;
+
+            const minCenterY = topY + mercOffset;
+            const maxCenterY = botY - mercOffset;
+
+            let clampedLat: number;
+            if (minCenterY >= maxCenterY) {
+              clampedLat = mercYToLat((topY + botY) / 2);
+            } else {
+              const centerY = latToMercY(lngLat.lat);
+              clampedLat = mercYToLat(Math.max(minCenterY, Math.min(maxCenterY, centerY)));
+            }
+
+            return {
+              center: new maplibregl.LngLat(lngLat.lng, clampedLat),
+              zoom: clampedZoom,
+            };
+          },
         });
 
         map.addControl(new maplibregl.NavigationControl(), "top-right");

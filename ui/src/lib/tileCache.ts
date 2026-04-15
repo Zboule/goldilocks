@@ -14,7 +14,10 @@ let _gridToLand: Int32Array | null = null;
 let _manifestVersion = 0;
 
 // --- Fetch queue: limits concurrent network requests ---
-const MAX_CONCURRENT = 12;
+// HTTP/2 multiplexes on a single connection so we can go well above the old
+// HTTP/1.1 6-per-domain limit. Cached responses (Cache API) resolve instantly
+// and don't consume a slot for long.
+const MAX_CONCURRENT = 20;
 let _activeCount = 0;
 const _queue: Array<{ run: () => void }> = [];
 
@@ -37,7 +40,8 @@ function queuedFetch(url: string): Promise<Response> {
 }
 
 // --- Persistent Cache API for .bin files ---
-const CACHE_NAME = "goldilocks-tiles-v3";
+const CACHE_PREFIX = "goldilocks-tiles-";
+let _cacheName = `${CACHE_PREFIX}v3`;
 let _cacheStorage: Cache | null = null;
 let _cacheReady: Promise<Cache | null> | null = null;
 
@@ -45,8 +49,20 @@ function getCache(): Promise<Cache | null> {
   if (_cacheStorage) return Promise.resolve(_cacheStorage);
   if (_cacheReady) return _cacheReady;
   if (typeof caches === "undefined") return Promise.resolve(null);
-  _cacheReady = caches.open(CACHE_NAME).then((c) => { _cacheStorage = c; return c; }).catch(() => null);
+  _cacheReady = caches.open(_cacheName).then((c) => { _cacheStorage = c; return c; }).catch(() => null);
   return _cacheReady;
+}
+
+async function evictStaleCaches(keepName: string) {
+  if (typeof caches === "undefined") return;
+  try {
+    const names = await caches.keys();
+    for (const name of names) {
+      if (name.startsWith(CACHE_PREFIX) && name !== keepName) {
+        await caches.delete(name);
+      }
+    }
+  } catch { /* ignore */ }
 }
 
 async function cachedFetch(url: string): Promise<Response> {
@@ -63,7 +79,9 @@ async function cachedFetch(url: string): Promise<Response> {
 }
 
 // --- Inflight tracking for UI loading indicators ---
-const _inflightPeriods = new Set<number>();
+// Uses a refcount so that a period stays "loading" until ALL tiles for that
+// period have resolved (display tile + every filter tile).
+const _inflightRefCount = new Map<number, number>();
 type InflightListener = () => void;
 const _inflightListeners = new Set<InflightListener>();
 
@@ -77,22 +95,37 @@ export function onInflightChange(fn: InflightListener): () => void {
 }
 
 export function getInflightPeriods(): Set<number> {
-  return new Set(_inflightPeriods);
+  const out = new Set<number>();
+  for (const [period, count] of _inflightRefCount) {
+    if (count > 0) out.add(period);
+  }
+  return out;
 }
 
 function addInflightPeriod(period: number) {
-  _inflightPeriods.add(period);
+  _inflightRefCount.set(period, (_inflightRefCount.get(period) ?? 0) + 1);
   _notifyInflight();
 }
 
 function removeInflightPeriod(period: number) {
-  _inflightPeriods.delete(period);
+  const count = (_inflightRefCount.get(period) ?? 1) - 1;
+  if (count <= 0) _inflightRefCount.delete(period);
+  else _inflightRefCount.set(period, count);
   _notifyInflight();
 }
 
 export function setManifest(m: Manifest) {
   _manifest = m;
   _manifestVersion++;
+  if (m.data_version) {
+    const newName = `${CACHE_PREFIX}${m.data_version}`;
+    if (newName !== _cacheName) {
+      _cacheName = newName;
+      _cacheStorage = null;
+      _cacheReady = null;
+      evictStaleCaches(newName);
+    }
+  }
 }
 
 export function getManifestVersion(): number {

@@ -182,11 +182,39 @@ export function useHoveredCell(
     [manifest, periods, displayVariable, filters, buildCellData, buildSkeleton],
   );
 
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const onCellHover = useCallback(
     (info: HoverInput | null) => {
-      updateCell(info);
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+
+      if (!info) {
+        updateCell(null);
+        return;
+      }
+
+      // Sync path: if all data is cached, show immediately
+      if (manifest && isLandIndexReady()) {
+        const landIdx = getLandArrayIndexSync(info.index);
+        const periodIndices = periods.map((p) => manifest.periods.indexOf(p)).filter((i) => i !== -1);
+        const useChunks = manifest.chunk_size && manifest.variable_order;
+        if (landIdx === -1 || !useChunks || areChunksCached(landIdx, periodIndices)) {
+          updateCell(info);
+          return;
+        }
+      }
+
+      // Async path: debounce to avoid fetching data for cells the cursor
+      // is just passing over during fast mouse movement
+      debounceRef.current = setTimeout(() => {
+        debounceRef.current = null;
+        updateCell(info);
+      }, 80);
     },
-    [updateCell],
+    [updateCell, manifest, periods],
   );
 
   useEffect(() => {
@@ -194,6 +222,12 @@ export function useHoveredCell(
       updateCell(lastInfoRef.current);
     }
   }, [updateCell]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
   return { hoveredCell, onCellHover };
 }

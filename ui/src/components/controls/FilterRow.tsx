@@ -21,15 +21,8 @@ export default function FilterRow({ filter, manifest, onChange, onRemove }: Prop
   const isCategorical = varInfo?.categorical === true;
 
   return (
-    <div className="rounded border border-gray-200 bg-gray-50 p-2 relative group">
-      <button
-        onClick={onRemove}
-        className="absolute top-1 right-1 text-gray-300 hover:text-red-500 transition-colors text-sm leading-none px-1 opacity-0 group-hover:opacity-100"
-        title="Remove filter"
-      >
-        ×
-      </button>
-      <div className="flex items-center gap-1.5 flex-wrap">
+    <div className="rounded border border-gray-200 bg-gray-50 p-2 space-y-1.5">
+      <div className="flex items-center gap-1.5">
         <VariableSelect
           value={filter.variable}
           onChange={(v) => {
@@ -39,8 +32,17 @@ export default function FilterRow({ filter, manifest, onChange, onRemove }: Prop
             onChange(patch);
           }}
           manifest={manifest}
-          className="text-xs"
+          className="text-xs flex-1 min-w-0"
         />
+        <button
+          onClick={onRemove}
+          className="text-gray-300 hover:text-red-500 transition-colors text-sm leading-none px-1 shrink-0"
+          title="Remove filter"
+        >
+          ×
+        </button>
+      </div>
+      <div className="flex items-center gap-1.5">
         {!isCategorical && (
           <StatSelect
             value={filter.stat}
@@ -72,7 +74,7 @@ export default function FilterRow({ filter, manifest, onChange, onRemove }: Prop
             />
           </>
         )}
-        <span className="text-[10px] text-gray-400">{varInfo?.units ?? ""}</span>
+        <span className="text-[10px] text-gray-400 shrink-0">{varInfo?.units ?? ""}</span>
       </div>
     </div>
   );

@@ -133,7 +133,7 @@ export default function ControlBar({
             periodLabels={manifest.period_labels}
             playing={playing}
             onTogglePlay={() => setPlaying((p) => !p)}
-            onClickPeriod={onClickPeriod}
+            onClickPeriod={(p) => { setPlaying(false); onClickPeriod(p); }}
             onSetActive={onSetActivePeriod}
             onLockAll={onLockAll}
             onClearLocked={onClearLocked}

@@ -38,26 +38,26 @@ LAND_MASK_CACHE = NATURAL_EARTH_DIR / "land_mask_025.npy"
 VARIABLES = {
     "temperature_day":            {"file": "temperature_day_periods.nc",            "units": "°C",       "label": "Day Temperature"},
     "temperature_night":          {"file": "temperature_night_periods.nc",          "units": "°C",       "label": "Night Temperature"},
-    "apparent_temperature_day":   {"file": "apparent_temperature_day_periods.nc",   "units": "°C",       "label": "Apparent Temp Day (BOM)"},
-    "apparent_temperature_night": {"file": "apparent_temperature_night_periods.nc", "units": "°C",       "label": "Apparent Temp Night (BOM)"},
+    "apparent_temperature_day":   {"file": "apparent_temperature_day_periods.nc",   "units": "°C",       "label": "Feels Like – Day (BOM)"},
+    "apparent_temperature_night": {"file": "apparent_temperature_night_periods.nc", "units": "°C",       "label": "Feels Like – Night (BOM)"},
     "dew_point":                  {"file": "dew_point_periods.nc",                  "units": "°C",       "label": "Dew Point"},
     "relative_humidity":          {"file": "relative_humidity_periods.nc",          "units": "%",        "label": "Relative Humidity"},
     "diurnal_range":              {"file": "diurnal_range_periods.nc",              "units": "°C",       "label": "Diurnal Range"},
     "wind_speed":                 {"file": "wind_speed_periods.nc",                 "units": "m/s",      "label": "Wind Speed"},
     "precipitation":              {"file": "precipitation_periods.nc",              "units": "mm/day",   "label": "Precipitation"},
-    "rainy_days":                 {"file": "rainy_days_periods.nc",                 "units": "fraction", "label": "Rainy Days"},
-    "heavy_rain_days":            {"file": "heavy_rain_days_periods.nc",            "units": "fraction", "label": "Heavy Rain Days"},
-    "muggy_days":                 {"file": "muggy_days_periods.nc",                 "units": "fraction", "label": "Muggy Days"},
-    "hot_days":                   {"file": "hot_days_periods.nc",                   "units": "fraction", "label": "Hot Days"},
-    "windy_days":                 {"file": "windy_days_periods.nc",                 "units": "fraction", "label": "Windy Days"},
+    "rainy_hours":                {"file": "rainy_hours_periods.nc",               "units": "fraction", "label": "Rain Hours (All Day)"},
+    "rainy_hours_day":            {"file": "rainy_hours_day_periods.nc",           "units": "fraction", "label": "Rain Hours (Daytime)"},
+    "rainy_hours_night":          {"file": "rainy_hours_night_periods.nc",         "units": "fraction", "label": "Rain Hours (Nighttime)"},
     "solar_radiation":            {"file": "solar_radiation_periods.nc",            "units": "W/m²",     "label": "Solar Insolation (TOA)"},
     "cloud_cover":                {"file": "cloud_cover_periods.nc",                "units": "fraction", "label": "Cloud Cover"},
+    "utci_day":                   {"file": "utci_day_periods.nc",                   "units": "°C",       "label": "Feels Like – Day (UTCI)"},
+    "utci_night":                 {"file": "utci_night_periods.nc",                 "units": "°C",       "label": "Feels Like – Night (UTCI)"},
 }
 
 STATS = ["mean", "median", "min", "max", "p10", "p90", "ystd"]
 
 GRID_WIDTH = 1440
-GRID_HEIGHT = 721
+GRID_HEIGHT = 601
 RESOLUTION_DEG = 0.25
 
 
@@ -213,7 +213,7 @@ def _rasterize_land_mask() -> np.ndarray:
 
 
 def load_land_mask() -> np.ndarray:
-    """Returns boolean mask (lat=721, lon=1440), True=land.
+    """Returns boolean mask (lat=601, lon=1440), True=land.
 
     Uses Natural Earth 10m land polygons (auto-downloaded) rasterized onto
     the 0.25° grid.  The result is cached to disk for fast re-runs.
@@ -267,10 +267,14 @@ def main():
     bitmap.tofile(TILES_DIR / "land_bitmap.bin")
     print(f"  Saved land_bitmap.bin ({(TILES_DIR / 'land_bitmap.bin').stat().st_size / 1024:.0f} KB)")
 
+    import hashlib
+    data_version = hashlib.md5(f"{time.time()}".encode()).hexdigest()[:8]
+
     manifest = {
+        "data_version": data_version,
         "grid": {"width": GRID_WIDTH, "height": GRID_HEIGHT, "resolution_deg": RESOLUTION_DEG},
         "lon_range": [0.0, 359.75],
-        "lat_range": [90.0, -90.0],
+        "lat_range": [90.0, -60.0],
         "periods": [],
         "period_labels": [],
         "stats": STATS,

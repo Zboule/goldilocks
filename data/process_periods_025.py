@@ -14,7 +14,7 @@ Stats per variable: mean, median, min, max, p10, p90, ystd
 Memory-efficient: loads one month at a time (~5 GB per variable).
 Uses pure numpy for all aggregation (no xarray resample — it OOMs).
 
-Output: data/processed/<variable>_periods.nc  (36 periods × 1440 lon × 721 lat)
+Output: data/processed/<variable>_periods.nc  (36 periods × 1440 lon × 601 lat)
 """
 
 import xarray as xr
@@ -34,8 +34,8 @@ OUT_DIR = Path("data/processed")
 
 POOLED_STATS = ["mean", "median", "min", "max", "p10", "p90"]
 STAT_NAMES = POOLED_STATS + ["ystd"]
-YEARS = list(range(2013, 2024))
-END_YEAR_MONTH = (2023, 1)
+YEARS = list(range(2013, 2023))
+MAX_LAT_ROWS = 601  # 90N to 60S at 0.25°; raw files may have 721 (to 90S)
 
 PERIOD_LABELS = []
 for m in range(1, 13):
@@ -65,19 +65,17 @@ def load_month_raw(var_name: str, month: int, nc_var: str | None = None):
     lon_coords = lat_coords = None
 
     for year in YEARS:
-        if year == END_YEAR_MONTH[0] and month > END_YEAR_MONTH[1]:
-            continue
         f = RAW_DIR / var_name / f"{year}-{month:02d}.nc"
         if not f.exists():
             continue
 
         ds = xr.open_dataset(f)
         da = ds[nc_var or var_name]
-        all_vals.append(da.values)
+        all_vals.append(da.values[:, :MAX_LAT_ROWS, :])
         all_times.append(da.time.values)
         if lon_coords is None:
             lon_coords = da.longitude.values
-            lat_coords = da.latitude.values
+            lat_coords = da.latitude.values[:MAX_LAT_ROWS]
         ds.close()
 
     if not all_vals:
@@ -99,18 +97,17 @@ def load_year_month_raw(var_name: str, year: int, month: int, nc_var: str | None
         return None
     ds = xr.open_dataset(f)
     da = ds[nc_var or var_name]
-    vals = da.values
+    vals = da.values[:, :MAX_LAT_ROWS, :]
     times = da.time.values
     lon_coords = da.longitude.values
-    lat_coords = da.latitude.values
+    lat_coords = da.latitude.values[:MAX_LAT_ROWS]
     ds.close()
     return vals, times, lon_coords, lat_coords
 
 
 def valid_years_for_month(month: int) -> list:
     """Return list of years that have data for a given month."""
-    return [y for y in YEARS
-            if not (y == END_YEAR_MONTH[0] and month > END_YEAR_MONTH[1])]
+    return list(YEARS)
 
 
 def get_day_of_month(times: np.ndarray) -> np.ndarray:
@@ -285,7 +282,7 @@ def process_temperature(mode: str):
     print(f"\n{'='*60}\n  Processing: {name} (daily {agg})\n{'='*60}")
     t_start = time.time()
 
-    n_lat, n_lon = 721, 1440
+    n_lat, n_lon = 601, 1440
     shape = (36, n_lat, n_lon)
     results = {s: np.full(shape, np.nan, dtype=np.float32) for s in STAT_NAMES}
     lon_coords = lat_coords = None
@@ -325,7 +322,7 @@ def process_temperature(mode: str):
     ds = _build_dataset(results, lon_coords, lat_coords)
     ds.attrs["variable"] = name
     ds.attrs["units"] = "°C"
-    ds.attrs["description"] = f"{'Daytime (daily max)' if mode == 'day' else 'Nighttime (daily min)'} temperature, 36-period stats (2013-2023), 0.25°"
+    ds.attrs["description"] = f"{'Daytime (daily max)' if mode == 'day' else 'Nighttime (daily min)'} temperature, 36-period stats (2013-2022), 0.25°"
 
     out = OUT_DIR / f"{name}_periods.nc"
     ds.to_netcdf(out)
@@ -339,7 +336,7 @@ def process_wind():
     print(f"\n{'='*60}\n  Processing: {name}\n{'='*60}")
     t_start = time.time()
 
-    n_lat, n_lon = 721, 1440
+    n_lat, n_lon = 601, 1440
     shape = (36, n_lat, n_lon)
     results = {s: np.full(shape, np.nan, dtype=np.float32) for s in STAT_NAMES}
     lon_coords = lat_coords = None
@@ -383,7 +380,7 @@ def process_wind():
     ds = _build_dataset(results, lon_coords, lat_coords)
     ds.attrs["variable"] = "wind_speed"
     ds.attrs["units"] = "m/s"
-    ds.attrs["description"] = "10m wind speed, 36-period stats from 6h readings (2013-2023), 0.25°"
+    ds.attrs["description"] = "10m wind speed, 36-period stats from 6h readings (2013-2022), 0.25°"
 
     out = OUT_DIR / f"{name}_periods.nc"
     ds.to_netcdf(out)
@@ -397,7 +394,7 @@ def process_precipitation():
     print(f"\n{'='*60}\n  Processing: {name} (daily sums)\n{'='*60}")
     t_start = time.time()
 
-    n_lat, n_lon = 721, 1440
+    n_lat, n_lon = 601, 1440
     shape = (36, n_lat, n_lon)
     results = {s: np.full(shape, np.nan, dtype=np.float32) for s in STAT_NAMES}
     lon_coords = lat_coords = None
@@ -433,7 +430,7 @@ def process_precipitation():
     ds = _build_dataset(results, lon_coords, lat_coords)
     ds.attrs["variable"] = "precipitation"
     ds.attrs["units"] = "mm/day"
-    ds.attrs["description"] = "Total precipitation (daily sums), 36-period stats (2013-2023), 0.25°"
+    ds.attrs["description"] = "Total precipitation (daily sums), 36-period stats (2013-2022), 0.25°"
 
     out = OUT_DIR / f"{name}_periods.nc"
     ds.to_netcdf(out)
@@ -447,7 +444,7 @@ def process_rainy_days():
     print(f"\n{'='*60}\n  Processing: {name}\n{'='*60}")
     t_start = time.time()
 
-    n_lat, n_lon = 721, 1440
+    n_lat, n_lon = 601, 1440
     shape = (36, n_lat, n_lon)
     results = {s: np.full(shape, np.nan, dtype=np.float32) for s in STAT_NAMES}
     lon_coords = lat_coords = None
@@ -472,9 +469,9 @@ def process_rainy_days():
         del vals_mm
         gc.collect()
 
-        rainy_count = (reshaped > 0.5).sum(axis=1)
-        is_allday_rain = (rainy_count >= 3).astype(np.float32)
-        del reshaped, rainy_count
+        daily_total_mm = reshaped.sum(axis=1)
+        is_rainy = (daily_total_mm > 5.0).astype(np.float32)
+        del reshaped, daily_total_mm
         gc.collect()
 
         daily_t = daily_times_from_6h(times)
@@ -493,7 +490,7 @@ def process_rainy_days():
                 yr_mask = dmask & (daily_years == yr)
                 if yr_mask.sum() == 0:
                     continue
-                frac = is_allday_rain[yr_mask].mean(axis=0)
+                frac = is_rainy[yr_mask].mean(axis=0)
                 year_fractions.append(frac)
 
             if not year_fractions:
@@ -506,7 +503,7 @@ def process_rainy_days():
             if pool.shape[0] >= 2:
                 results["ystd"][pidx] = np.nanstd(pool, axis=0).astype(np.float32)
 
-        del is_allday_rain
+        del is_rainy
         gc.collect()
         log(f"  Month {month:02d} done in {time.time() - t0:.0f}s")
 
@@ -514,7 +511,7 @@ def process_rainy_days():
     ds.attrs["variable"] = "rainy_days"
     ds.attrs["units"] = "fraction"
     ds.attrs["stat_semantics"] = "year-normalized: stats are computed across per-year fractions, not pooled daily values"
-    ds.attrs["description"] = "Fraction of all-day rainy days (3+ of 4 six-hour periods >0.5mm), 36-period stats over per-year fractions (2013-2023), 0.25°"
+    ds.attrs["description"] = "Fraction of rainy days (daily total > 5mm), 36-period stats over per-year fractions (2013-2022), 0.25°"
 
     out = OUT_DIR / f"{name}_periods.nc"
     ds.to_netcdf(out)
@@ -528,7 +525,7 @@ def process_simple_6h(var_raw: str, var_out: str, transform=None,
     print(f"\n{'='*60}\n  Processing: {var_out}\n{'='*60}")
     t_start = time.time()
 
-    n_lat, n_lon = 721, 1440
+    n_lat, n_lon = 601, 1440
     shape = (36, n_lat, n_lon)
     results = {s: np.full(shape, np.nan, dtype=np.float32) for s in STAT_NAMES}
     lon_coords = lat_coords = None
@@ -589,7 +586,7 @@ def process_hot_days():
     print(f"\n{'='*60}\n  Processing: {name}\n{'='*60}")
     t_start = time.time()
 
-    n_lat, n_lon = 721, 1440
+    n_lat, n_lon = 601, 1440
     shape = (36, n_lat, n_lon)
     results = {s: np.full(shape, np.nan, dtype=np.float32) for s in STAT_NAMES}
     lon_coords = lat_coords = None
@@ -619,7 +616,7 @@ def process_hot_days():
         log(f"  Month {month:02d} done in {time.time() - t0:.0f}s")
 
     _save_event_variable(name, results, lon_coords, lat_coords,
-                         "fraction", "Fraction of days with daily max temp > 35°C (2013-2023), 0.25°", t_start)
+                         "fraction", "Fraction of days with daily max temp > 35°C (2013-2022), 0.25°", t_start)
 
 
 def process_heavy_rain_days():
@@ -628,7 +625,7 @@ def process_heavy_rain_days():
     print(f"\n{'='*60}\n  Processing: {name}\n{'='*60}")
     t_start = time.time()
 
-    n_lat, n_lon = 721, 1440
+    n_lat, n_lon = 601, 1440
     shape = (36, n_lat, n_lon)
     results = {s: np.full(shape, np.nan, dtype=np.float32) for s in STAT_NAMES}
     lon_coords = lat_coords = None
@@ -658,7 +655,7 @@ def process_heavy_rain_days():
         log(f"  Month {month:02d} done in {time.time() - t0:.0f}s")
 
     _save_event_variable(name, results, lon_coords, lat_coords,
-                         "fraction", "Fraction of days with precip > 10mm (2013-2023), 0.25°", t_start)
+                         "fraction", "Fraction of days with precip > 10mm (2013-2022), 0.25°", t_start)
 
 
 def process_windy_days():
@@ -667,7 +664,7 @@ def process_windy_days():
     print(f"\n{'='*60}\n  Processing: {name}\n{'='*60}")
     t_start = time.time()
 
-    n_lat, n_lon = 721, 1440
+    n_lat, n_lon = 601, 1440
     shape = (36, n_lat, n_lon)
     results = {s: np.full(shape, np.nan, dtype=np.float32) for s in STAT_NAMES}
     lon_coords = lat_coords = None
@@ -704,7 +701,7 @@ def process_windy_days():
         log(f"  Month {month:02d} done in {time.time() - t0:.0f}s")
 
     _save_event_variable(name, results, lon_coords, lat_coords,
-                         "fraction", "Fraction of days with max wind > 8 m/s (2013-2023), 0.25°", t_start)
+                         "fraction", "Fraction of days with max wind > 8 m/s (2013-2022), 0.25°", t_start)
 
 
 def process_muggy_days():
@@ -713,7 +710,7 @@ def process_muggy_days():
     print(f"\n{'='*60}\n  Processing: {name} (year-by-year)\n{'='*60}")
     t_start = time.time()
 
-    n_lat, n_lon = 721, 1440
+    n_lat, n_lon = 601, 1440
     shape = (36, n_lat, n_lon)
     results = {s: np.full(shape, np.nan, dtype=np.float32) for s in STAT_NAMES}
     lon_coords = lat_coords = None
@@ -775,7 +772,7 @@ def process_muggy_days():
         return
 
     _save_event_variable(name, results, lon_coords, lat_coords,
-                         "fraction", "Fraction of days with derived dew point > 18°C (2013-2023), 0.25°", t_start)
+                         "fraction", "Fraction of days with derived dew point > 18°C (2013-2022), 0.25°", t_start)
 
 
 def process_dew_point():
@@ -785,7 +782,7 @@ def process_dew_point():
     print(f"\n{'='*60}\n  Processing: {name} (year-by-year)\n{'='*60}")
     t_start = time.time()
 
-    n_lat, n_lon = 721, 1440
+    n_lat, n_lon = 601, 1440
     shape = (36, n_lat, n_lon)
     results = {s: np.full(shape, np.nan, dtype=np.float32) for s in STAT_NAMES}
     lon_coords = lat_coords = None
@@ -849,7 +846,7 @@ def process_dew_point():
     ds = _build_dataset(results, lon_coords, lat_coords)
     ds.attrs["variable"] = name
     ds.attrs["units"] = "°C"
-    ds.attrs["description"] = "Dew point temperature (derived from T + RH at 1000hPa, daily mean), 36-period stats (2013-2023), 0.25°"
+    ds.attrs["description"] = "Dew point temperature (derived from T + RH at 1000hPa, daily mean), 36-period stats (2013-2022), 0.25°"
     out = OUT_DIR / f"{name}_periods.nc"
     ds.to_netcdf(out)
     log(f"SAVED {out.name} ({out.stat().st_size / 1e6:.1f} MB) — total {time.time() - t_start:.0f}s")
@@ -863,7 +860,7 @@ def process_relative_humidity():
     print(f"\n{'='*60}\n  Processing: {name}\n{'='*60}")
     t_start = time.time()
 
-    n_lat, n_lon = 721, 1440
+    n_lat, n_lon = 601, 1440
     shape = (36, n_lat, n_lon)
     results = {s: np.full(shape, np.nan, dtype=np.float32) for s in STAT_NAMES}
     lon_coords = lat_coords = None
@@ -902,7 +899,7 @@ def process_relative_humidity():
     ds = _build_dataset(results, lon_coords, lat_coords)
     ds.attrs["variable"] = name
     ds.attrs["units"] = "%"
-    ds.attrs["description"] = "Relative humidity at 1000 hPa (daily mean), 36-period stats (2013-2023), 0.25°"
+    ds.attrs["description"] = "Relative humidity at 1000 hPa (daily mean), 36-period stats (2013-2022), 0.25°"
     out = OUT_DIR / f"{name}_periods.nc"
     ds.to_netcdf(out)
     log(f"SAVED {out.name} ({out.stat().st_size / 1e6:.1f} MB) — total {time.time() - t_start:.0f}s")
@@ -918,7 +915,7 @@ def process_apparent_temperature(mode: str):
     print(f"\n{'='*60}\n  Processing: {name} (daily {agg}, year-by-year)\n{'='*60}")
     t_start = time.time()
 
-    n_lat, n_lon = 721, 1440
+    n_lat, n_lon = 601, 1440
     shape = (36, n_lat, n_lon)
     results = {s: np.full(shape, np.nan, dtype=np.float32) for s in STAT_NAMES}
     lon_coords = lat_coords = None
@@ -1002,7 +999,7 @@ def process_apparent_temperature(mode: str):
     ds = _build_dataset(results, lon_coords, lat_coords)
     ds.attrs["variable"] = name
     ds.attrs["units"] = "°C"
-    ds.attrs["description"] = f"Apparent temperature BOM ({'daily max' if mode == 'day' else 'daily min'}), AT=T+0.33e-0.70ws-4.00 (2013-2023), 0.25°"
+    ds.attrs["description"] = f"Apparent temperature BOM ({'daily max' if mode == 'day' else 'daily min'}), AT=T+0.33e-0.70ws-4.00 (2013-2022), 0.25°"
     out = OUT_DIR / f"{name}_periods.nc"
     ds.to_netcdf(out)
     log(f"SAVED {out.name} ({out.stat().st_size / 1e6:.1f} MB) — total {time.time() - t_start:.0f}s")
@@ -1016,7 +1013,7 @@ def process_solar_radiation():
     print(f"\n{'='*60}\n  Processing: {name}\n{'='*60}")
     t_start = time.time()
 
-    n_lat, n_lon = 721, 1440
+    n_lat, n_lon = 601, 1440
     shape = (36, n_lat, n_lon)
     results = {s: np.full(shape, np.nan, dtype=np.float32) for s in STAT_NAMES}
     lon_coords = lat_coords = None
@@ -1071,7 +1068,7 @@ def process_diurnal_range():
     print(f"\n{'='*60}\n  Processing: {name}\n{'='*60}")
     t_start = time.time()
 
-    n_lat, n_lon = 721, 1440
+    n_lat, n_lon = 601, 1440
     shape = (36, n_lat, n_lon)
     results = {s: np.full(shape, np.nan, dtype=np.float32) for s in STAT_NAMES}
     lon_coords = lat_coords = None
@@ -1108,7 +1105,186 @@ def process_diurnal_range():
     ds = _build_dataset(results, lon_coords, lat_coords)
     ds.attrs["variable"] = name
     ds.attrs["units"] = "°C"
-    ds.attrs["description"] = "Diurnal temperature range (daily max - min), 36-period stats (2013-2023), 0.25°"
+    ds.attrs["description"] = "Diurnal temperature range (daily max - min), 36-period stats (2013-2022), 0.25°"
+    out = OUT_DIR / f"{name}_periods.nc"
+    ds.to_netcdf(out)
+    log(f"SAVED {out.name} ({out.stat().st_size / 1e6:.1f} MB) — total {time.time() - t_start:.0f}s")
+    del ds, results
+    gc.collect()
+
+
+def process_utci(mode: str):
+    """UTCI from ERA5-HEAT daily statistics (CDS).
+
+    Files contain utci_daily_max and utci_daily_min (Kelvin), already aggregated
+    to daily resolution. Grid is 601 lat (90N-60S) x 1440 lon — matches our
+    standard grid exactly (no padding needed)."""
+    name = f"utci_{mode}"
+    nc_var = "utci_daily_max" if mode == "day" else "utci_daily_min"
+    print(f"\n{'='*60}\n  Processing: {name} (from ERA5-HEAT {nc_var})\n{'='*60}")
+    t_start = time.time()
+
+    utci_dir = RAW_DIR / "utci_daily"
+    n_lat, n_lon = 601, 1440
+    shape = (36, n_lat, n_lon)
+    results = {s: np.full(shape, np.nan, dtype=np.float32) for s in STAT_NAMES}
+    lon_coords = lat_coords = None
+
+    for month in range(1, 13):
+        t0 = time.time()
+        log(f"Month {month:02d}: loading ERA5-HEAT {nc_var} year-by-year...")
+        all_daily = []
+        all_daily_times = []
+
+        for year in valid_years_for_month(month):
+            f = utci_dir / f"{year}-{month:02d}.nc"
+            if not f.exists():
+                continue
+            ds = xr.open_dataset(f)
+
+            if nc_var not in ds:
+                log(f"  WARNING: {nc_var} not in {f.name}, vars: {list(ds.data_vars)}")
+                ds.close()
+                continue
+
+            vals = ds[nc_var].values  # (time, lat, lon) in Kelvin
+            times = ds[nc_var].time.values
+
+            lon_name = "lon" if "lon" in ds.dims else "longitude"
+            lat_name = "lat" if "lat" in ds.dims else "latitude"
+            lons = ds[lon_name].values
+            lats = ds[lat_name].values
+            ds.close()
+
+            daily = np.float32(vals - 273.15)
+            del vals
+
+            # ERA5-HEAT uses -180..180; shift to 0..360 to match other variables
+            if lons[0] < 0:
+                shift = np.searchsorted(lons, 0)
+                daily = np.roll(daily, -shift, axis=2)
+                lons = np.concatenate([lons[shift:], lons[:shift] + 360])
+
+            if lon_coords is None:
+                lon_coords, lat_coords = lons, lats
+
+            all_daily.append(daily)
+            all_daily_times.append(times)
+            del daily, times
+            gc.collect()
+
+        if not all_daily:
+            continue
+
+        daily_vals = np.concatenate(all_daily, axis=0)
+        daily_t = np.concatenate(all_daily_times, axis=0)
+        del all_daily, all_daily_times
+        daily_dom = get_day_of_month(daily_t)
+        daily_years = get_years_from_times(daily_t)
+        del daily_t
+        gc.collect()
+
+        compute_sub_periods_threaded(daily_vals, month, daily_dom, daily_years, results)
+
+        del daily_vals, daily_dom, daily_years
+        gc.collect()
+        log(f"  Month {month:02d} done in {time.time() - t0:.0f}s")
+
+    if lon_coords is None:
+        log(f"SKIP {name} — no UTCI data found in {utci_dir}")
+        return
+
+    ds = _build_dataset(results, lon_coords, lat_coords)
+    ds.attrs["variable"] = name
+    ds.attrs["units"] = "°C"
+    ds.attrs["description"] = (
+        f"Universal Thermal Climate Index ({'daily max' if mode == 'day' else 'daily min'}), "
+        f"ERA5-HEAT v1.1 (2013-2022), 0.25°. "
+        f"UTCI accounts for air temperature, humidity, wind speed, and radiation (MRT)."
+    )
+    out = OUT_DIR / f"{name}_periods.nc"
+    ds.to_netcdf(out)
+    log(f"SAVED {out.name} ({out.stat().st_size / 1e6:.1f} MB) — total {time.time() - t_start:.0f}s")
+    del ds, results
+    gc.collect()
+
+
+def process_rainy_hours(mode: str):
+    """Rainy-hour fractions from hourly ERA5 precipitation (CDS).
+
+    Files contain daily rainy_fraction, rainy_fraction_day, rainy_fraction_night
+    (fraction of hours with precip > 0.1mm). mode selects which variable to read."""
+    var_map = {"all": "rainy_fraction", "day": "rainy_fraction_day", "night": "rainy_fraction_night"}
+    nc_var = var_map[mode]
+    name = "rainy_hours" if mode == "all" else f"rainy_hours_{mode}"
+    label_map = {"all": "all 24h", "day": "daytime 7-19 local", "night": "nighttime 19-7 local"}
+    print(f"\n{'='*60}\n  Processing: {name} ({label_map[mode]})\n{'='*60}")
+    t_start = time.time()
+
+    rh_dir = RAW_DIR / "rainy_hours"
+    n_lat, n_lon = 601, 1440
+    shape = (36, n_lat, n_lon)
+    results = {s: np.full(shape, np.nan, dtype=np.float32) for s in STAT_NAMES}
+    lon_coords = lat_coords = None
+
+    for month in range(1, 13):
+        t0 = time.time()
+        log(f"Month {month:02d}: loading {nc_var} year-by-year...")
+        all_daily = []
+        all_daily_times = []
+
+        for year in valid_years_for_month(month):
+            f = rh_dir / f"{year}-{month:02d}.nc"
+            if not f.exists():
+                continue
+            ds = xr.open_dataset(f)
+            if nc_var not in ds:
+                log(f"  WARNING: {nc_var} not in {f.name}")
+                ds.close()
+                continue
+
+            vals = ds[nc_var].values  # (time, lat, lon), fraction 0-1
+            times = ds[nc_var].time.values
+            lons = ds["longitude"].values
+            lats = ds["latitude"].values
+            ds.close()
+
+            if lon_coords is None:
+                lon_coords, lat_coords = lons, lats
+
+            all_daily.append(vals.astype(np.float32))
+            all_daily_times.append(times)
+            del vals, times
+            gc.collect()
+
+        if not all_daily:
+            continue
+
+        daily_vals = np.concatenate(all_daily, axis=0)
+        daily_t = np.concatenate(all_daily_times, axis=0)
+        del all_daily, all_daily_times
+        daily_dom = get_day_of_month(daily_t)
+        daily_years = get_years_from_times(daily_t)
+        del daily_t
+        gc.collect()
+
+        compute_sub_periods_threaded(daily_vals, month, daily_dom, daily_years, results)
+
+        del daily_vals, daily_dom, daily_years
+        gc.collect()
+        log(f"  Month {month:02d} done in {time.time() - t0:.0f}s")
+
+    if lon_coords is None:
+        log(f"SKIP {name} — no data found in {rh_dir}")
+        return
+
+    ds = _build_dataset(results, lon_coords, lat_coords)
+    ds.attrs["variable"] = name
+    ds.attrs["units"] = "fraction"
+    ds.attrs["description"] = (
+        f"Fraction of {label_map[mode]} hours with precipitation > 0.1mm, "
+        f"ERA5 hourly (2013-2022), 0.25°."
+    )
     out = OUT_DIR / f"{name}_periods.nc"
     ds.to_netcdf(out)
     log(f"SAVED {out.name} ({out.stat().st_size / 1e6:.1f} MB) — total {time.time() - t_start:.0f}s")
@@ -1141,7 +1317,7 @@ def main():
     print("  ERA5 0.25° → 36-Period Climatological Stats")
     print(f"  CPUs: {os.cpu_count()}")
     print(f"  Input:  {RAW_DIR}/<var>/*.nc (6-hourly, {len(YEARS)} years, 0.25°)")
-    print(f"  Output: {OUT_DIR}/*_periods.nc (36 periods × 721 lat × 1440 lon)")
+    print(f"  Output: {OUT_DIR}/*_periods.nc (36 periods × 601 lat × 1440 lon)")
     print(f"  Periods: Early/Mid/Late × 12 months (days 1-10, 11-20, 21-end)")
     print(f"  Stats: {', '.join(STAT_NAMES)}")
     print(f"  Method: pure numpy (no xarray resample)")
@@ -1165,22 +1341,12 @@ def main():
         process_wind()
     if not skip_if_done("precipitation"):
         process_precipitation()
-    if not skip_if_done("rainy_days"):
-        process_rainy_days()
     if not skip_if_done("cloud_cover"):
         process_simple_6h(
             "total_cloud_cover", "cloud_cover",
             units="fraction (0=clear, 1=overcast)",
-            description="Total cloud cover, 36-period stats from 6h readings (2013-2023), 0.25°",
+            description="Total cloud cover, 36-period stats from 6h readings (2013-2022), 0.25°",
         )
-
-    # --- Event-frequency variables (use existing raw data) ---
-    if not skip_if_done("hot_days"):
-        process_hot_days()
-    if not skip_if_done("heavy_rain_days"):
-        process_heavy_rain_days()
-    if not skip_if_done("windy_days"):
-        process_windy_days()
 
     # --- Derived variables (use existing raw data) ---
     if not skip_if_done("diurnal_range"):
@@ -1195,12 +1361,23 @@ def main():
         process_apparent_temperature("day")
     if not skip_if_done("apparent_temperature_night"):
         process_apparent_temperature("night")
-    if not skip_if_done("muggy_days"):
-        process_muggy_days()
-
     # --- New variables requiring radiation download ---
     if not skip_if_done("solar_radiation"):
         process_solar_radiation()
+
+    # --- UTCI from ERA5-HEAT (CDS download) ---
+    if not skip_if_done("utci_day"):
+        process_utci("day")
+    if not skip_if_done("utci_night"):
+        process_utci("night")
+
+    # --- Rainy hours from hourly ERA5 precipitation (CDS download) ---
+    if not skip_if_done("rainy_hours"):
+        process_rainy_hours("all")
+    if not skip_if_done("rainy_hours_day"):
+        process_rainy_hours("day")
+    if not skip_if_done("rainy_hours_night"):
+        process_rainy_hours("night")
 
     print(f"\n{'='*60}")
     print("  All done. Output files:")

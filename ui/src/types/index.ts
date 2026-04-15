@@ -28,6 +28,7 @@ export interface CountryInfo {
 }
 
 export interface Manifest {
+  data_version?: string;
   grid: { width: number; height: number; resolution_deg: number };
   lon_range: [number, number];
   lat_range: [number, number];
