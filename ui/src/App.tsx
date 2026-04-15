@@ -20,7 +20,7 @@ export default function App() {
   const { manifest, loading: manifestLoading } = useManifest();
   const mapRef = useRef<MapViewHandle>(null);
 
-  const [displayVariable, setDisplayVariable] = useState("utci_day");
+  const [displayVariable, setDisplayVariable] = useState("");
   const [displayStat, setDisplayStat] = useState("mean");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mapReady, setMapReady] = useState(false);
@@ -42,6 +42,8 @@ export default function App() {
       if (manifest.periods.length > 0) {
         initPeriod(manifest.periods[0]);
       }
+      const vars = manifest.variable_order ?? Object.keys(manifest.variables);
+      setDisplayVariable((prev) => (prev && manifest.variables[prev] ? prev : vars[0]));
     }
   }, [manifest, initPeriod]);
 
@@ -95,7 +97,7 @@ export default function App() {
 
   const displayedCell = pinnedCell ?? hoveredCell;
 
-  if (manifestLoading || !manifest || selectedPeriods.length === 0) {
+  if (manifestLoading || !manifest || selectedPeriods.length === 0 || !displayVariable) {
     return (
       <div className="flex items-center justify-center h-screen text-gray-500">
         Loading...
@@ -104,6 +106,13 @@ export default function App() {
   }
 
   const varInfo = manifest.variables[displayVariable];
+  if (!varInfo) {
+    return (
+      <div className="flex items-center justify-center h-screen text-gray-500">
+        Unknown variable: {displayVariable}
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-screen flex flex-col overflow-hidden">

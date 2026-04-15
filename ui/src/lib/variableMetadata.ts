@@ -22,19 +22,12 @@ export interface VariableGroup {
 
 export const VARIABLE_GROUPS: VariableGroup[] = [
   {
-    label: "Feels Like",
-    variables: [
-      "utci_day",
-      "utci_night",
-      "apparent_temperature_day",
-      "apparent_temperature_night",
-    ],
-  },
-  {
     label: "Temperature",
     variables: [
       "temperature_day",
       "temperature_night",
+      "apparent_temperature_day",
+      "apparent_temperature_night",
       "diurnal_range",
     ],
   },
@@ -48,7 +41,11 @@ export const VARIABLE_GROUPS: VariableGroup[] = [
   },
   {
     label: "Precipitation & Cloud",
-    variables: ["precipitation", "rainy_hours_day", "rainy_hours_night", "rainy_hours", "cloud_cover", "solar_radiation"],
+    variables: ["precipitation", "rainy_days", "heavy_rain_days", "cloud_cover", "solar_radiation"],
+  },
+  {
+    label: "Comfort & Threshold",
+    variables: ["muggy_days", "hot_days", "windy_days"],
   },
   {
     label: "Safety",
@@ -131,43 +128,6 @@ export const VARIABLE_DETAILS: Record<string, VariableDetail> = {
       { range: "8–15°C", label: "Cool — comfortable for sleep", value: 11 },
       { range: "15–22°C", label: "Warm night", value: 18 },
       { range: "> 22°C", label: "Hot night — hard to sleep", value: 27 },
-    ],
-  },
-  utci_day: {
-    id: "utci_day",
-    source: "ERA5-HEAT v1.1, Copernicus Climate Data Store (2013–2022)",
-    rawVariable:
-      "Pre-computed UTCI from ERA5 air temperature, humidity, 10m wind, and surface radiation (mean radiant temperature)",
-    derivation:
-      "Universal Thermal Climate Index — a thermo-physiological model simulating human body response (sweat, shivering, skin blood flow). Accounts for radiation via Mean Radiant Temperature, unlike simpler indices. Daily maximum from hourly UTCI values.",
-    temporalAgg: "36 periods, daily max UTCI pooled across 10 years.",
-    stats: "Pooled stats + Year Std.",
-    ranges: [
-      { range: "< −13°C", label: "Strong cold stress", value: -20 },
-      { range: "−13 to 0°C", label: "Moderate cold stress", value: -6 },
-      { range: "0–9°C", label: "Slight cold stress", value: 4 },
-      { range: "9–26°C", label: "No thermal stress (comfortable)", value: 18 },
-      { range: "26–32°C", label: "Moderate heat stress", value: 29 },
-      { range: "32–38°C", label: "Strong heat stress", value: 35 },
-      { range: "> 38°C", label: "Very strong heat stress", value: 42 },
-    ],
-  },
-  utci_night: {
-    id: "utci_night",
-    source: "ERA5-HEAT v1.1, Copernicus Climate Data Store (2013–2022)",
-    rawVariable:
-      "Pre-computed UTCI from ERA5 air temperature, humidity, 10m wind, and surface radiation (mean radiant temperature)",
-    derivation:
-      "Same UTCI model as day. Daily minimum from hourly UTCI values — represents nighttime thermal comfort.",
-    temporalAgg: "36 periods, daily min UTCI pooled across 10 years.",
-    stats: "Pooled stats + Year Std.",
-    ranges: [
-      { range: "< −27°C", label: "Strong cold stress", value: -35 },
-      { range: "−27 to −13°C", label: "Moderate cold stress", value: -20 },
-      { range: "−13 to 0°C", label: "Slight cold stress", value: -6 },
-      { range: "0–9°C", label: "No thermal stress", value: 4 },
-      { range: "9–20°C", label: "Comfortable night", value: 14 },
-      { range: "> 20°C", label: "Warm night — moderate heat stress", value: 25 },
     ],
   },
   diurnal_range: {
@@ -289,51 +249,80 @@ export const VARIABLE_DETAILS: Record<string, VariableDetail> = {
       { range: "> 350 W/m²", label: "Very strong — tropical / desert sun", value: 400 },
     ],
   },
-  rainy_hours: {
-    id: "rainy_hours",
-    source: "ERA5 hourly reanalysis via CDS (2013–2022)",
-    rawVariable: "total_precipitation (hourly, 0.25°)",
+  rainy_days: {
+    id: "rainy_days",
+    source: "ERA5 reanalysis via WeatherBench2 (2013–2023)",
+    rawVariable: "total_precipitation (6-hourly, 0.25°)",
     derivation:
-      "Fraction of all 24 hours per day with precipitation > 0.1mm (WMO trace threshold). 0.25 means ~6 hours of rain per day.",
-    temporalAgg: "36 periods, daily fractions pooled across 10 years.",
-    stats: "Pooled stats + Year Std. Median = typical day's rain fraction.",
-    ranges: [
-      { range: "< 0.05", label: "Very dry — under 1h rain/day", value: 0.02 },
-      { range: "0.05–0.15", label: "Light — 1-3.5h rain/day", value: 0.10 },
-      { range: "0.15–0.30", label: "Moderate — 3.5-7h rain/day", value: 0.22 },
-      { range: "0.30–0.50", label: "Wet — 7-12h rain/day", value: 0.40 },
-      { range: "> 0.50", label: "Very wet — over half the day", value: 0.70 },
-    ],
-  },
-  rainy_hours_day: {
-    id: "rainy_hours_day",
-    source: "ERA5 hourly reanalysis via CDS (2013–2022)",
-    rawVariable: "total_precipitation (hourly, 0.25°)",
-    derivation:
-      "Fraction of daytime hours (7AM–7PM local solar time) with precipitation > 0.1mm. Local solar time = UTC + lon/15. Most relevant for outdoor activities.",
-    temporalAgg: "36 periods, daily fractions pooled across 10 years.",
+      "Fraction of days with total precipitation > 1mm. 0.25 means roughly 1 in 4 days has rain.",
+    temporalAgg: "36 periods, daily fractions pooled across 11 years.",
     stats: "Pooled stats + Year Std.",
     ranges: [
-      { range: "< 0.05", label: "Dry daytimes — under 30min rain", value: 0.02 },
-      { range: "0.05–0.15", label: "Light — 1-2h daytime rain", value: 0.10 },
-      { range: "0.15–0.30", label: "Moderate — 2-3.5h daytime rain", value: 0.22 },
-      { range: "0.30–0.50", label: "Wet — 3.5-6h daytime rain", value: 0.40 },
-      { range: "> 0.50", label: "Very wet daytimes", value: 0.70 },
+      { range: "< 0.05", label: "Very dry — rarely rains", value: 0.02 },
+      { range: "0.05–0.15", label: "Mostly dry", value: 0.10 },
+      { range: "0.15–0.30", label: "Occasional rain", value: 0.22 },
+      { range: "0.30–0.50", label: "Frequent rain", value: 0.40 },
+      { range: "> 0.50", label: "Rains most days", value: 0.70 },
     ],
   },
-  rainy_hours_night: {
-    id: "rainy_hours_night",
-    source: "ERA5 hourly reanalysis via CDS (2013–2022)",
-    rawVariable: "total_precipitation (hourly, 0.25°)",
+  heavy_rain_days: {
+    id: "heavy_rain_days",
+    source: "ERA5 reanalysis via WeatherBench2 (2013–2023)",
+    rawVariable: "total_precipitation (6-hourly, 0.25°)",
     derivation:
-      "Fraction of nighttime hours (7PM–7AM local solar time) with precipitation > 0.1mm.",
-    temporalAgg: "36 periods, daily fractions pooled across 10 years.",
+      "Fraction of days with total precipitation > 10mm. Indicates frequency of heavy downpours.",
+    temporalAgg: "36 periods, daily fractions pooled across 11 years.",
     stats: "Pooled stats + Year Std.",
     ranges: [
-      { range: "< 0.05", label: "Dry nights", value: 0.02 },
-      { range: "0.05–0.15", label: "Light — occasional night rain", value: 0.10 },
-      { range: "0.15–0.30", label: "Moderate night rain", value: 0.22 },
-      { range: "> 0.30", label: "Frequent night rain", value: 0.40 },
+      { range: "< 0.05", label: "Rare heavy rain", value: 0.02 },
+      { range: "0.05–0.15", label: "Occasional heavy rain", value: 0.10 },
+      { range: "0.15–0.30", label: "Frequent heavy rain", value: 0.22 },
+      { range: "> 0.30", label: "Very frequent heavy rain", value: 0.40 },
+    ],
+  },
+  muggy_days: {
+    id: "muggy_days",
+    source: "ERA5 reanalysis via WeatherBench2 (2013–2023)",
+    rawVariable: "2m_temperature, relative_humidity (6-hourly)",
+    derivation:
+      "Fraction of days where dew point exceeds 18°C, indicating sticky/uncomfortable humidity.",
+    temporalAgg: "36 periods, daily fractions pooled across 11 years.",
+    stats: "Pooled stats + Year Std.",
+    ranges: [
+      { range: "< 0.10", label: "Rarely muggy", value: 0.05 },
+      { range: "0.10–0.30", label: "Occasionally muggy", value: 0.20 },
+      { range: "0.30–0.60", label: "Often muggy", value: 0.45 },
+      { range: "> 0.60", label: "Persistently muggy", value: 0.80 },
+    ],
+  },
+  hot_days: {
+    id: "hot_days",
+    source: "ERA5 reanalysis via WeatherBench2 (2013–2023)",
+    rawVariable: "2m_temperature (6-hourly)",
+    derivation:
+      "Fraction of days where daily max temperature exceeds 32°C.",
+    temporalAgg: "36 periods, daily fractions pooled across 11 years.",
+    stats: "Pooled stats + Year Std.",
+    ranges: [
+      { range: "< 0.10", label: "Rarely hot", value: 0.05 },
+      { range: "0.10–0.30", label: "Occasionally hot", value: 0.20 },
+      { range: "0.30–0.60", label: "Frequently hot", value: 0.45 },
+      { range: "> 0.60", label: "Persistently hot", value: 0.80 },
+    ],
+  },
+  windy_days: {
+    id: "windy_days",
+    source: "ERA5 reanalysis via WeatherBench2 (2013–2023)",
+    rawVariable: "10m u/v wind components (6-hourly)",
+    derivation:
+      "Fraction of days where mean wind speed exceeds 8 m/s (fresh breeze).",
+    temporalAgg: "36 periods, daily fractions pooled across 11 years.",
+    stats: "Pooled stats + Year Std.",
+    ranges: [
+      { range: "< 0.10", label: "Rarely windy", value: 0.05 },
+      { range: "0.10–0.30", label: "Occasionally windy", value: 0.20 },
+      { range: "0.30–0.60", label: "Frequently windy", value: 0.45 },
+      { range: "> 0.60", label: "Persistently windy", value: 0.80 },
     ],
   },
   travel_safety: {

@@ -13,7 +13,7 @@ export function useFilters() {
         ...prev,
         {
           id,
-          variable: "utci_day",
+          variable: "temperature_day",
           stat: "mean",
           operator: ">",
           value: 0,
