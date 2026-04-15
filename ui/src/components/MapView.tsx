@@ -77,6 +77,7 @@ const MapView = forwardRef<MapViewHandle, Props>(({ onHover, onClick, onReady },
           autoHighlight: true,
           highlightColor: [255, 255, 255, 80],
           extruded: false,
+          // @ts-expect-error beforeId is valid for MapboxOverlay interleaved mode
           beforeId: firstLabelLayerRef.current ?? undefined,
           updateTriggers: {
             getFillColor: [version],
