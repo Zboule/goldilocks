@@ -150,8 +150,9 @@ const SAFETY_COLORS: Record<number, RGBA> = {
 const PALETTES: Record<string, (t: number) => RGBA> = {
   wind_speed: windScale,
   precipitation: blues,
-  rainy_days: blues,
-  heavy_rain_days: blues,
+  rainy_hours: blues,
+  rainy_hours_day: blues,
+  rainy_hours_night: blues,
   cloud_cover: greys,
   dew_point: dewPointScale,
   relative_humidity: humidityScale,
@@ -184,6 +185,7 @@ function temperatureToColor(value: number): RGBA {
 const TEMP_VARIABLES = new Set([
   "temperature_day", "temperature_night",
   "apparent_temperature_day", "apparent_temperature_night",
+  "utci_day", "utci_night",
   "dew_point",
 ]);
 
@@ -192,6 +194,8 @@ export const FIXED_DISPLAY_RANGE: Record<string, [number, number]> = {
   temperature_night: [-30, 45],
   apparent_temperature_day: [-30, 45],
   apparent_temperature_night: [-30, 45],
+  utci_day: [-30, 45],
+  utci_night: [-30, 45],
   dew_point: [-30, 45],
   travel_safety: [1, 4],
 };
@@ -201,6 +205,8 @@ export const YSTD_DISPLAY_MAX: Record<string, number> = {
   temperature_night: 4,
   apparent_temperature_day: 4,
   apparent_temperature_night: 4,
+  utci_day: 4,
+  utci_night: 4,
   dew_point: 4,
   diurnal_range: 3,
   relative_humidity: 12,
@@ -208,8 +214,9 @@ export const YSTD_DISPLAY_MAX: Record<string, number> = {
   precipitation: 5,
   cloud_cover: 0.10,
   solar_radiation: 30,
-  rainy_days: 0.12,
-  heavy_rain_days: 0.12,
+  rainy_hours: 0.12,
+  rainy_hours_day: 0.12,
+  rainy_hours_night: 0.12,
 };
 
 export function getColor(

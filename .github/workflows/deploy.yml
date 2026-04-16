@@ -38,11 +38,16 @@ jobs:
         working-directory: ui
         run: pnpm build
 
-      - name: Download tiles from release
+      - name: Download tiles and static assets from release
         run: |
-          gh release download v2.3.1 --repo Zboule/goldilocks \
+          gh release download v3.0.0 --repo Zboule/goldilocks \
             --pattern "tiles-*.tar.gz" --dir /tmp --clobber
-          tar -xzf /tmp/tiles-v2.3.1.tar.gz -C ui/dist/
+          gh release download v3.0.0 --repo Zboule/goldilocks \
+            --pattern "static-assets.tar.gz" --dir /tmp --clobber
+          mkdir -p ui/dist/tiles
+          tar -xzf /tmp/tiles-*.tar.gz -C ui/dist/tiles/
+          tar -xzf /tmp/static-assets.tar.gz --strip-components=2 \
+            -C ui/dist/tiles/ data/tiles/tile_shapes.bin
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
