@@ -20,7 +20,7 @@ export default function App() {
   const { manifest, loading: manifestLoading } = useManifest();
   const mapRef = useRef<MapViewHandle>(null);
 
-  const [displayVariable, setDisplayVariable] = useState("");
+  const [displayVariable, setDisplayVariable] = useState("utci_day");
   const [displayStat, setDisplayStat] = useState("mean");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mapReady, setMapReady] = useState(false);
