@@ -367,7 +367,7 @@ export default function CellTooltip({ hoveredCell, manifest, displayVariable, di
     <div
       ref={tooltipRef}
       className={`fixed z-50 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-gray-200 
-                 max-md:bottom-[80px] max-md:left-4 max-md:right-4 max-md:top-auto
+                 max-md:bottom-[calc(env(safe-area-inset-bottom)+76px)] max-md:left-4 max-md:right-4 max-md:top-auto
                  md:left-[var(--hover-left)] md:top-[var(--hover-top)] md:w-max
                  px-2.5 py-2 sm:px-3 sm:py-2 text-[10px] sm:text-xs overflow-hidden
                  ${pinned ? "pointer-events-auto ring-2 ring-blue-400/50" : "pointer-events-none"}`}

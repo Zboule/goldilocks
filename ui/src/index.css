@@ -11,12 +11,15 @@ body,
   font-family: system-ui, -apple-system, sans-serif;
 }
 
-/* Mobile browsers: 100vh includes the URL bar; dvh tracks the visible viewport. */
-@supports (height: 100dvh) {
+/* Mobile browsers: 100vh includes the URL bar / toolbar. Use svh (small
+   viewport) so the app always fits within the toolbar-visible area — avoids
+   iOS Safari's quirk where 100dvh briefly resolves to the large height on
+   first paint, pushing bottom controls under the toolbar. */
+@supports (height: 100svh) {
   html,
   body,
   #root {
-    height: 100dvh;
+    height: 100svh;
   }
 }
 

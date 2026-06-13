@@ -164,7 +164,7 @@ export default function App() {
   }
 
   return (
-    <div className="w-full h-screen h-dvh flex flex-col overflow-hidden">
+    <div className="w-full h-full flex flex-col overflow-hidden">
       <ControlBar
         manifest={manifest}
         displayVariable={displayVariable}
@@ -237,7 +237,7 @@ export default function App() {
           {!sidebarOpen && !legendExpanded && (
             <button
               onClick={() => setSidebarOpen(true)}
-              className="md:hidden absolute bottom-4 right-3 z-20 flex items-center gap-1.5 rounded-full bg-white shadow-lg border border-gray-200 pl-3 pr-3.5 h-11 text-sm font-medium text-gray-700 active:bg-gray-50"
+              className="md:hidden absolute bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-3 z-20 flex items-center gap-1.5 rounded-full bg-white shadow-lg border border-gray-200 pl-3 pr-3.5 h-11 text-sm font-medium text-gray-700 active:bg-gray-50"
               aria-label="Open filters"
             >
               <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">

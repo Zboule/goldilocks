@@ -46,7 +46,7 @@ export default function ColorLegend({ variable, stat, min, max, units, filterCou
 
   if (categorical) {
     return (
-      <div className="absolute bottom-4 left-2 md:left-4 z-10 rounded-lg bg-white/80 backdrop-blur-sm px-2.5 md:px-3 py-1.5 shadow-md max-w-[calc(100vw-9rem)] md:max-w-[calc(100vw-1rem)] overflow-hidden">
+      <div className="absolute bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-2 md:left-4 z-10 rounded-lg bg-white/80 backdrop-blur-sm px-2.5 md:px-3 py-1.5 shadow-md max-w-[calc(100vw-9rem)] md:max-w-[calc(100vw-1rem)] overflow-hidden">
         <div className="flex items-center gap-1 md:gap-1.5 flex-wrap">
           {SAFETY_LABELS.map(([level, label]) => {
             const c = SAFETY_COLORS[level];
@@ -77,7 +77,7 @@ export default function ColorLegend({ variable, stat, min, max, units, filterCou
 
   return (
     <div
-      className={`absolute bottom-4 left-2 md:left-4 z-10 rounded-lg bg-white/85 backdrop-blur-sm shadow-md overflow-hidden
+      className={`absolute bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-2 md:left-4 z-10 rounded-lg bg-white/85 backdrop-blur-sm shadow-md overflow-hidden
         ${expanded ? "max-w-[calc(100vw-1rem)] md:max-w-xs" : "max-w-[calc(100vw-9rem)] md:max-w-[calc(100vw-1rem)]"}`}
     >
       {/* Collapsed pill shows the mini gradient; expanded header is just a title
