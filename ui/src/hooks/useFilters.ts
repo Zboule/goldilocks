@@ -3,8 +3,10 @@ import type { Filter } from "../types";
 
 let nextId = 1;
 
-export function useFilters() {
-  const [filters, setFilters] = useState<Filter[]>([]);
+export function useFilters(initial?: Omit<Filter, "id">[]) {
+  const [filters, setFilters] = useState<Filter[]>(() =>
+    (initial ?? []).map((f) => ({ ...f, id: `f${nextId++}` })),
+  );
 
   const addFilter = useCallback(
     (defaults?: Partial<Filter>) => {

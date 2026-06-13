@@ -10,6 +10,7 @@ import { setManifest } from "./lib/tileCache";
 import { FIXED_DISPLAY_RANGE, YSTD_DISPLAY_MAX } from "./lib/colorScale";
 import { useInflightPeriods } from "./hooks/useInflightPeriods";
 import { useIsMobile } from "./hooks/useIsMobile";
+import { parseState, encodeState } from "./lib/urlState";
 
 import ControlBar from "./components/controls/ControlBar";
 import FilterSidebar from "./components/controls/FilterSidebar";
@@ -21,8 +22,11 @@ export default function App() {
   const { manifest, loading: manifestLoading } = useManifest();
   const mapRef = useRef<MapViewHandle>(null);
 
-  const [displayVariable, setDisplayVariable] = useState("utci_day");
-  const [displayStat, setDisplayStat] = useState("mean");
+  // Restore shareable state from the URL (once, on first render).
+  const [initialUrl] = useState(() => parseState(window.location.search));
+
+  const [displayVariable, setDisplayVariable] = useState(initialUrl.variable ?? "utci_day");
+  const [displayStat, setDisplayStat] = useState(initialUrl.stat ?? "mean");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [legendExpanded, setLegendExpanded] = useState(false);
@@ -38,21 +42,41 @@ export default function App() {
     clearLocked,
     clearActive,
     toggleGroup,
-  } = usePeriodSelection();
+  } = usePeriodSelection({ locked: initialUrl.locked, active: initialUrl.active });
 
   useEffect(() => {
     if (manifest) {
       setManifest(manifest);
       if (manifest.periods.length > 0) {
+        // No-op if the URL already restored a selection.
         initPeriod(manifest.periods[0]);
       }
       const vars = manifest.variable_order ?? Object.keys(manifest.variables);
       setDisplayVariable((prev) => (prev && manifest.variables[prev] ? prev : vars[0]));
+      setDisplayStat((prev) => (prev && manifest.stats.includes(prev) ? prev : "mean"));
     }
   }, [manifest, initPeriod]);
 
   const { filters, addFilter, removeFilter, updateFilter, clearFilters, loadPreset } =
-    useFilters();
+    useFilters(initialUrl.filters);
+
+  // Mirror the current state into the URL (debounced; replaceState so it
+  // doesn't spam browser history) once the manifest is ready.
+  useEffect(() => {
+    if (!manifest) return;
+    const t = window.setTimeout(() => {
+      const qs = encodeState({
+        variable: displayVariable,
+        stat: displayStat,
+        locked: Array.from(lockedPeriods),
+        active: activePeriod,
+        filters,
+      });
+      const url = `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`;
+      window.history.replaceState(null, "", url);
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [manifest, displayVariable, displayStat, lockedPeriods, activePeriod, filters]);
 
   const staticCells = useStaticGrid(manifest);
   const inflightPeriods = useInflightPeriods();

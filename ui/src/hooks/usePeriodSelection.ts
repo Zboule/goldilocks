@@ -84,11 +84,11 @@ function reducer(state: State, action: Action): State {
   }
 }
 
-export function usePeriodSelection() {
-  const [state, dispatch] = useReducer(reducer, {
-    locked: new Set<number>(),
-    active: null,
-  });
+export function usePeriodSelection(initial?: { locked?: number[]; active?: number | null }) {
+  const [state, dispatch] = useReducer(reducer, initial, (i) => ({
+    locked: new Set<number>(i?.locked ?? []),
+    active: i?.active ?? null,
+  }));
 
   const selectedPeriods = useMemo(() => {
     const s = new Set(state.locked);
