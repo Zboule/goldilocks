@@ -7,6 +7,8 @@ export interface ReferenceRange {
 
 export interface VariableDetail {
   id: string;
+  /** Plain-language "what is this?" intro, no jargon, for a first-time reader. */
+  plain: string;
   source: string;
   rawVariable: string;
   derivation: string;
@@ -84,6 +86,8 @@ export const SHORT_LABELS: Record<string, string> = {
 export const VARIABLE_DETAILS: Record<string, VariableDetail> = {
   temperature_day: {
     id: "temperature_day",
+    plain:
+      "How warm it actually gets during the day, measured in the shade. This is the plain thermometer reading, not how it feels once you add sun, wind, or humidity.",
     source: "ERA5 reanalysis via WeatherBench2 (2013–2023, 11 years)",
     rawVariable: "2m_temperature (6-hourly, 0.25° grid)",
     derivation:
@@ -104,6 +108,8 @@ export const VARIABLE_DETAILS: Record<string, VariableDetail> = {
   },
   temperature_night: {
     id: "temperature_night",
+    plain:
+      "How cold it gets overnight, the lowest temperature, usually just before dawn. A good hint of how comfortable sleeping will be.",
     source: "ERA5 reanalysis via WeatherBench2 (2013–2023, 11 years)",
     rawVariable: "2m_temperature (6-hourly, 0.25° grid)",
     derivation:
@@ -115,14 +121,16 @@ export const VARIABLE_DETAILS: Record<string, VariableDetail> = {
     ranges: [
       { range: "< -10°C", label: "Severe frost", value: -20 },
       { range: "-10–0°C", label: "Freezing nights", value: -5 },
-      { range: "0–10°C", label: "Cold — heating needed", value: 5 },
-      { range: "10–18°C", label: "Cool — comfortable for sleep", value: 14 },
+      { range: "0–10°C", label: "Cold, heating needed", value: 5 },
+      { range: "10–18°C", label: "Cool, comfortable for sleep", value: 14 },
       { range: "18–24°C", label: "Warm nights", value: 21 },
-      { range: "> 24°C", label: "Tropical nights — hard to sleep", value: 27 },
+      { range: "> 24°C", label: "Tropical nights, hard to sleep", value: 27 },
     ],
   },
   apparent_temperature_day: {
     id: "apparent_temperature_day",
+    plain:
+      "What the daytime weather actually feels like on your skin, not just the number on the thermometer. It mixes in humidity (which makes heat feel worse) and wind (which cools you down), using the Australian “feels like” method.",
     source: "ERA5 reanalysis via WeatherBench2 (2013–2023)",
     rawVariable:
       "2m_temperature, relative_humidity at 1000 hPa, 10m u/v wind (6-hourly)",
@@ -132,17 +140,19 @@ export const VARIABLE_DETAILS: Record<string, VariableDetail> = {
     stats:
       "Pooled stats + Year Std. AT < T is normal in temperate conditions; AT > T only in hot, humid, calm conditions.",
     ranges: [
-      { range: "< 5°C", label: "Very cold — heavy clothing", value: -5 },
-      { range: "5–12°C", label: "Cold — jacket needed", value: 8 },
-      { range: "12–18°C", label: "Cool — light layers", value: 15 },
+      { range: "< 5°C", label: "Very cold, heavy clothing", value: -5 },
+      { range: "5–12°C", label: "Cold, jacket needed", value: 8 },
+      { range: "12–18°C", label: "Cool, light layers", value: 15 },
       { range: "18–24°C", label: "Comfortable for most people", value: 21 },
-      { range: "24–28°C", label: "Warm — still pleasant", value: 26 },
-      { range: "28–35°C", label: "Hot — uncomfortable for many", value: 31 },
-      { range: "> 35°C", label: "Very hot — heat stress risk", value: 40 },
+      { range: "24–28°C", label: "Warm, still pleasant", value: 26 },
+      { range: "28–35°C", label: "Hot, uncomfortable for many", value: 31 },
+      { range: "> 35°C", label: "Very hot, heat stress risk", value: 40 },
     ],
   },
   apparent_temperature_night: {
     id: "apparent_temperature_night",
+    plain:
+      "What the night feels like once humidity and wind are taken into account, a better guide than the raw thermometer to whether the evening will feel comfortable.",
     source: "ERA5 reanalysis via WeatherBench2 (2013–2023)",
     rawVariable:
       "2m_temperature, relative_humidity at 1000 hPa, 10m u/v wind (6-hourly)",
@@ -153,18 +163,20 @@ export const VARIABLE_DETAILS: Record<string, VariableDetail> = {
     ranges: [
       { range: "< 0°C", label: "Freezing feels-like", value: -10 },
       { range: "0–8°C", label: "Very cold", value: 4 },
-      { range: "8–15°C", label: "Cool — comfortable for sleep", value: 11 },
+      { range: "8–15°C", label: "Cool, comfortable for sleep", value: 11 },
       { range: "15–22°C", label: "Warm night", value: 18 },
-      { range: "> 22°C", label: "Hot night — hard to sleep", value: 27 },
+      { range: "> 22°C", label: "Hot night, hard to sleep", value: 27 },
     ],
   },
   utci_day: {
     id: "utci_day",
+    plain:
+      "The most complete “feels like” score for being outside in the daytime. It captures how your whole body reacts to the combination of sun, shade, wind, and humidity. The 9–26°C band is the “just right”, no-stress zone.",
     source: "ERA5-HEAT v1.1, Copernicus Climate Data Store (2013–2022)",
     rawVariable:
       "Pre-computed UTCI from ERA5 air temperature, humidity, 10m wind, and surface radiation (mean radiant temperature)",
     derivation:
-      "Universal Thermal Climate Index — a thermo-physiological model simulating human body response (sweat, shivering, skin blood flow). Accounts for radiation via Mean Radiant Temperature, unlike simpler indices. Daily maximum from hourly UTCI values.",
+      "Universal Thermal Climate Index, a thermo-physiological model simulating human body response (sweat, shivering, skin blood flow). Accounts for radiation via Mean Radiant Temperature, unlike simpler indices. Daily maximum from hourly UTCI values.",
     temporalAgg: "36 periods, daily max UTCI pooled across 10 years.",
     stats: "Pooled stats + Year Std.",
     ranges: [
@@ -179,11 +191,13 @@ export const VARIABLE_DETAILS: Record<string, VariableDetail> = {
   },
   utci_night: {
     id: "utci_night",
+    plain:
+      "The same whole-body “feels like” comfort score, but for nighttime, a good way to judge how pleasant the evenings and sleeping will be.",
     source: "ERA5-HEAT v1.1, Copernicus Climate Data Store (2013–2022)",
     rawVariable:
       "Pre-computed UTCI from ERA5 air temperature, humidity, 10m wind, and surface radiation (mean radiant temperature)",
     derivation:
-      "Same UTCI model as day. Daily minimum from hourly UTCI values — represents nighttime thermal comfort.",
+      "Same UTCI model as day. Daily minimum from hourly UTCI values, represents nighttime thermal comfort.",
     temporalAgg: "36 periods, daily min UTCI pooled across 10 years.",
     stats: "Pooled stats + Year Std.",
     ranges: [
@@ -192,11 +206,13 @@ export const VARIABLE_DETAILS: Record<string, VariableDetail> = {
       { range: "−13 to 0°C", label: "Slight cold stress", value: -6 },
       { range: "0–9°C", label: "No thermal stress", value: 4 },
       { range: "9–20°C", label: "Comfortable night", value: 14 },
-      { range: "> 20°C", label: "Warm night — moderate heat stress", value: 25 },
+      { range: "> 20°C", label: "Warm night, moderate heat stress", value: 25 },
     ],
   },
   diurnal_range: {
     id: "diurnal_range",
+    plain:
+      "How big the jump is between the cool of night and the warmth of day. Deserts swing wildly (chilly nights, scorching afternoons); islands and coasts barely change. A small number means a steady, even climate.",
     source: "ERA5 reanalysis via WeatherBench2 (2013–2023)",
     rawVariable: "2m_temperature (6-hourly)",
     derivation:
@@ -204,15 +220,17 @@ export const VARIABLE_DETAILS: Record<string, VariableDetail> = {
     temporalAgg: "36 periods, daily range values pooled across 11 years.",
     stats: "Pooled stats + Year Std. Low values = stable conditions; high values = large day/night swings.",
     ranges: [
-      { range: "< 5°C", label: "Very small swing — oceanic/tropical", value: 2.5 },
-      { range: "5–10°C", label: "Moderate — typical coastal", value: 7.5 },
-      { range: "10–15°C", label: "Large — continental climate", value: 12.5 },
-      { range: "15–25°C", label: "Very large — desert/arid", value: 20 },
-      { range: "> 25°C", label: "Extreme — high-altitude desert", value: 30 },
+      { range: "< 5°C", label: "Very small swing, oceanic/tropical", value: 2.5 },
+      { range: "5–10°C", label: "Moderate, typical coastal", value: 7.5 },
+      { range: "10–15°C", label: "Large, continental climate", value: 12.5 },
+      { range: "15–25°C", label: "Very large, desert/arid", value: 20 },
+      { range: "> 25°C", label: "Extreme, high-altitude desert", value: 30 },
     ],
   },
   dew_point: {
     id: "dew_point",
+    plain:
+      "How muggy or “sticky” the air feels, the truest measure of humidity. Low numbers feel fresh and dry; high numbers feel sweaty and oppressive, the kind of air that makes a summer evening uncomfortable.",
     source: "ERA5 reanalysis via WeatherBench2 (2013–2023)",
     rawVariable: "2m_temperature + relative_humidity at 1000 hPa (6-hourly)",
     derivation:
@@ -221,39 +239,43 @@ export const VARIABLE_DETAILS: Record<string, VariableDetail> = {
     stats:
       "Pooled stats + Year Std.",
     ranges: [
-      { range: "< 5°C", label: "Very dry — desert-like", value: -5 },
-      { range: "5–10°C", label: "Dry — very comfortable", value: 7.5 },
+      { range: "< 5°C", label: "Very dry, desert-like", value: -5 },
+      { range: "5–10°C", label: "Dry, very comfortable", value: 7.5 },
       { range: "10–16°C", label: "Comfortable", value: 13 },
       { range: "16–18°C", label: "Starting to feel humid", value: 17 },
-      { range: "18–21°C", label: "Sticky — somewhat uncomfortable", value: 19.5 },
+      { range: "18–21°C", label: "Sticky, somewhat uncomfortable", value: 19.5 },
       { range: "21–24°C", label: "Oppressive", value: 22.5 },
-      { range: "> 24°C", label: "Extremely muggy — tropical", value: 27 },
+      { range: "> 24°C", label: "Extremely muggy, tropical", value: 27 },
     ],
   },
   relative_humidity: {
     id: "relative_humidity",
+    plain:
+      "Humidity as the familiar percentage from weather reports, how full of moisture the air is. 40–60% is the comfortable zone; very low dries out your skin, very high feels damp and clammy.",
     source: "ERA5 reanalysis via WeatherBench2 (2013–2023)",
     rawVariable: "relative_humidity at 1000 hPa pressure level (6-hourly, 0–1 fraction)",
     derivation:
       "Loaded directly from ERA5 at the 1000 hPa level (near-surface approximation). Converted from 0–1 fraction to 0–100%. Daily mean of 4 six-hourly values.",
     temporalAgg: "36 periods, daily mean RH pooled across 11 years.",
     stats:
-      "Pooled stats + Year Std. Note: RH is temperature-dependent — 60% at 15°C feels different from 60% at 35°C. Use dew point for absolute moisture.",
+      "Pooled stats + Year Std. Note: RH is temperature-dependent, 60% at 15°C feels different from 60% at 35°C. Use dew point for absolute moisture.",
     ranges: [
-      { range: "< 25%", label: "Very dry — skin/respiratory discomfort", value: 12 },
-      { range: "25–40%", label: "Dry — comfortable in cool temps", value: 32 },
+      { range: "< 25%", label: "Very dry, skin/respiratory discomfort", value: 12 },
+      { range: "25–40%", label: "Dry, comfortable in cool temps", value: 32 },
       { range: "40–60%", label: "Comfortable range", value: 50 },
       { range: "60–75%", label: "Moderately humid", value: 67 },
-      { range: "75–90%", label: "Humid — can feel sticky if warm", value: 82 },
-      { range: "> 90%", label: "Very humid — foggy, tropical", value: 95 },
+      { range: "75–90%", label: "Humid, can feel sticky if warm", value: 82 },
+      { range: "> 90%", label: "Very humid, foggy, tropical", value: 95 },
     ],
   },
   wind_speed: {
     id: "wind_speed",
+    plain:
+      "How windy it usually is. Gentle breezes are pleasant; strong, steady wind makes it feel colder and can make being outdoors unpleasant.",
     source: "ERA5 reanalysis via WeatherBench2 (2013–2023)",
     rawVariable: "10m u/v wind components (6-hourly)",
     derivation:
-      "Wind speed = √(u² + v²) computed at each 6-hourly timestep. Not daily-aggregated — all 6-hourly values used directly.",
+      "Wind speed = √(u² + v²) computed at each 6-hourly timestep. Not daily-aggregated, all 6-hourly values used directly.",
     temporalAgg:
       "36 periods, all 6-hourly speed values (~440 per period) pooled across 11 years.",
     stats: "Pooled stats + Year Std.",
@@ -261,13 +283,15 @@ export const VARIABLE_DETAILS: Record<string, VariableDetail> = {
       { range: "< 2 m/s", label: "Calm", value: 1 },
       { range: "2–5 m/s", label: "Light breeze", value: 3.5 },
       { range: "5–8 m/s", label: "Gentle to moderate breeze", value: 6.5 },
-      { range: "8–12 m/s", label: "Fresh breeze — noticeably windy", value: 10 },
-      { range: "12–17 m/s", label: "Strong — uncomfortable outdoors", value: 14.5 },
-      { range: "> 17 m/s", label: "Gale force — dangerous", value: 22 },
+      { range: "8–12 m/s", label: "Fresh breeze, noticeably windy", value: 10 },
+      { range: "12–17 m/s", label: "Strong, uncomfortable outdoors", value: 14.5 },
+      { range: "> 17 m/s", label: "Gale force, dangerous", value: 22 },
     ],
   },
   precipitation: {
     id: "precipitation",
+    plain:
+      "How much rain (or melted snow) falls on a typical day, measured by depth. It tells you the amount of water that comes down, not how long the rain lasts.",
     source: "ERA5 reanalysis via WeatherBench2 (2013–2023)",
     rawVariable: "total_precipitation_6hr (6-hourly, meters of water equivalent)",
     derivation:
@@ -279,11 +303,13 @@ export const VARIABLE_DETAILS: Record<string, VariableDetail> = {
       { range: "1–5 mm/day", label: "Light rain", value: 3 },
       { range: "5–15 mm/day", label: "Moderate rain", value: 10 },
       { range: "15–30 mm/day", label: "Heavy rain", value: 22 },
-      { range: "> 30 mm/day", label: "Very heavy — flooding risk", value: 40 },
+      { range: "> 30 mm/day", label: "Very heavy, flooding risk", value: 40 },
     ],
   },
   cloud_cover: {
     id: "cloud_cover",
+    plain:
+      "How cloudy the sky usually is, from clear blue to fully grey and overcast. Higher numbers mean less sunshine reaching the ground.",
     source: "ERA5 reanalysis via WeatherBench2 (2013–2023)",
     rawVariable: "total_cloud_cover (6-hourly, 0–1 fraction)",
     derivation: "Used directly. 0 = clear sky, 1 = fully overcast.",
@@ -299,23 +325,27 @@ export const VARIABLE_DETAILS: Record<string, VariableDetail> = {
   },
   solar_radiation: {
     id: "solar_radiation",
+    plain:
+      "How much sunshine energy pours down, basically how strong and long the sun is. Tropical and desert spots get the most; polar winters get almost none. (This ignores clouds, so pair it with Cloud Cover for the real picture.)",
     source: "ERA5 reanalysis via WeatherBench2 (2013–2021, 9 years)",
     rawVariable: "toa_incident_solar_radiation_6hr (J/m², top-of-atmosphere)",
     derivation:
-      "How much sunlight energy reaches the top of the atmosphere above each location. Higher values mean longer, stronger sunshine (depends on latitude and season). Does not account for clouds — combine with Cloud Cover for a full picture.",
+      "How much sunlight energy reaches the top of the atmosphere above each location. Higher values mean longer, stronger sunshine (depends on latitude and season). Does not account for clouds, combine with Cloud Cover for a full picture.",
     temporalAgg: "36 periods, daily mean pooled across 9 years.",
     stats:
       "Pooled stats + Year Std. Higher = more potential sunshine. Actual ground-level sunshine depends on cloud cover.",
     ranges: [
-      { range: "< 50 W/m²", label: "Very weak — polar winter, little daylight", value: 25 },
-      { range: "50–150 W/m²", label: "Weak — short days or high latitude", value: 100 },
-      { range: "150–250 W/m²", label: "Moderate — typical mid-latitude", value: 200 },
-      { range: "250–350 W/m²", label: "Strong — long sunny days", value: 300 },
-      { range: "> 350 W/m²", label: "Very strong — tropical / desert sun", value: 400 },
+      { range: "< 50 W/m²", label: "Very weak, polar winter, little daylight", value: 25 },
+      { range: "50–150 W/m²", label: "Weak, short days or high latitude", value: 100 },
+      { range: "150–250 W/m²", label: "Moderate, typical mid-latitude", value: 200 },
+      { range: "250–350 W/m²", label: "Strong, long sunny days", value: 300 },
+      { range: "> 350 W/m²", label: "Very strong, tropical / desert sun", value: 400 },
     ],
   },
   rainy_hours: {
     id: "rainy_hours",
+    plain:
+      "How much of the day actually has rain falling, across the full 24 hours. Unlike the rainfall amount, this tells you whether rain is a quick passing shower or drags on, half a day of drizzle feels very different from one downpour.",
     source: "ERA5 hourly reanalysis via CDS (2013–2022)",
     rawVariable: "total_precipitation (hourly, 0.25°)",
     derivation:
@@ -323,15 +353,17 @@ export const VARIABLE_DETAILS: Record<string, VariableDetail> = {
     temporalAgg: "36 periods, daily fractions pooled across 10 years.",
     stats: "Pooled stats + Year Std. Median = typical day's rain fraction.",
     ranges: [
-      { range: "< 0.05", label: "Very dry — under 1h rain/day", value: 0.02 },
-      { range: "0.05–0.15", label: "Light — 1-3.5h rain/day", value: 0.10 },
-      { range: "0.15–0.30", label: "Moderate — 3.5-7h rain/day", value: 0.22 },
-      { range: "0.30–0.50", label: "Wet — 7-12h rain/day", value: 0.40 },
-      { range: "> 0.50", label: "Very wet — over half the day", value: 0.70 },
+      { range: "< 0.05", label: "Very dry, under 1h rain/day", value: 0.02 },
+      { range: "0.05–0.15", label: "Light, 1-3.5h rain/day", value: 0.10 },
+      { range: "0.15–0.30", label: "Moderate, 3.5-7h rain/day", value: 0.22 },
+      { range: "0.30–0.50", label: "Wet, 7-12h rain/day", value: 0.40 },
+      { range: "> 0.50", label: "Very wet, over half the day", value: 0.70 },
     ],
   },
   rainy_hours_day: {
     id: "rainy_hours_day",
+    plain:
+      "How much of the daytime (roughly 7am–7pm) has rain falling, the hours you'd actually be out and about. Great for judging whether a place is good for outdoor plans.",
     source: "ERA5 hourly reanalysis via CDS (2013–2022)",
     rawVariable: "total_precipitation (hourly, 0.25°)",
     derivation:
@@ -339,15 +371,17 @@ export const VARIABLE_DETAILS: Record<string, VariableDetail> = {
     temporalAgg: "36 periods, daily fractions pooled across 10 years.",
     stats: "Pooled stats + Year Std.",
     ranges: [
-      { range: "< 0.05", label: "Dry daytimes — under 30min rain", value: 0.02 },
-      { range: "0.05–0.15", label: "Light — 1-2h daytime rain", value: 0.10 },
-      { range: "0.15–0.30", label: "Moderate — 2-3.5h daytime rain", value: 0.22 },
-      { range: "0.30–0.50", label: "Wet — 3.5-6h daytime rain", value: 0.40 },
+      { range: "< 0.05", label: "Dry daytimes, under 30min rain", value: 0.02 },
+      { range: "0.05–0.15", label: "Light, 1-2h daytime rain", value: 0.10 },
+      { range: "0.15–0.30", label: "Moderate, 2-3.5h daytime rain", value: 0.22 },
+      { range: "0.30–0.50", label: "Wet, 3.5-6h daytime rain", value: 0.40 },
       { range: "> 0.50", label: "Very wet daytimes", value: 0.70 },
     ],
   },
   rainy_hours_night: {
     id: "rainy_hours_night",
+    plain:
+      "How much of the night has rain falling. Rain that comes mostly at night can mean pleasant, dry days.",
     source: "ERA5 hourly reanalysis via CDS (2013–2022)",
     rawVariable: "total_precipitation (hourly, 0.25°)",
     derivation:
@@ -356,18 +390,20 @@ export const VARIABLE_DETAILS: Record<string, VariableDetail> = {
     stats: "Pooled stats + Year Std.",
     ranges: [
       { range: "< 0.05", label: "Dry nights", value: 0.02 },
-      { range: "0.05–0.15", label: "Light — occasional night rain", value: 0.10 },
+      { range: "0.05–0.15", label: "Light, occasional night rain", value: 0.10 },
       { range: "0.15–0.30", label: "Moderate night rain", value: 0.22 },
       { range: "> 0.30", label: "Frequent night rain", value: 0.40 },
     ],
   },
   travel_safety: {
     id: "travel_safety",
+    plain:
+      "A simple 1-to-4 safety rating for each country, blended from US, German, and Canadian government travel advice. 1 means “normal precautions”, 4 means “do not travel”. Lower is safer.",
     source: "Composite of US State Dept, Germany (Auswärtiges Amt), and Canada (Global Affairs)",
     rawVariable: "Advisory level 1–4 per country (averaged across sources)",
     derivation:
       "Each country is assigned advisory levels by three governments. The Goldilocks composite is the average of available sources, rounded to the nearest integer. Grid cells inherit the composite level of their country via spatial join on Natural Earth admin-0 boundaries. Border cells use the maximum risk among overlapping countries.",
-    temporalAgg: "Static — does not vary by period. Same value for all time periods.",
+    temporalAgg: "Static, does not vary by period. Same value for all time periods.",
     stats:
       "Single value per cell (all statistics are identical). Use in filters: e.g., travel_safety < 3 to exclude Level 3 and 4 countries.",
     ranges: [

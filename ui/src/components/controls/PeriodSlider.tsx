@@ -42,6 +42,37 @@ export default function PeriodSlider({
   // so locking doesn't collapse it
   const [expandedMonth, setExpandedMonth] = useState<number>(0);
 
+  // Tapping a month previews its mid period. The blue highlight should move to
+  // the new month at the START of the expand animation, but the heavy map
+  // recompute that `onSetActive` triggers must wait until the animation is done
+  // (else it stutters). So we move the highlight instantly via `previewActive`
+  // and defer the real `onSetActive` (the map update) by the animation length.
+  const [previewActive, setPreviewActive] = useState<number | null>(null);
+  const effectiveActive = previewActive ?? activePeriod;
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelPreview = () => {
+    if (previewTimerRef.current) {
+      clearTimeout(previewTimerRef.current);
+      previewTimerRef.current = null;
+    }
+  };
+  // Once the real active period catches up, drop the optimistic preview.
+  useEffect(() => { setPreviewActive(null); }, [activePeriod]);
+  useEffect(() => cancelPreview, []);
+
+  const expandMonth = (mi: number) => {
+    setExpandedMonth(mi);
+    const midP = periods[mi * 3 + 1];
+    cancelPreview();
+    if (midP !== undefined) {
+      setPreviewActive(midP); // move the blue highlight now
+      previewTimerRef.current = setTimeout(() => {
+        previewTimerRef.current = null;
+        onSetActive(midP); // map catches up after the animation
+      }, 320);
+    }
+  };
+
   useEffect(() => {
     if (!playing) return;
 
@@ -80,7 +111,7 @@ export default function PeriodSlider({
       const p = periods[monthIdx * 3 + s];
       if (p === undefined) continue;
       if (lockedPeriods.has(p)) locked = true;
-      if (p === activePeriod) active = true;
+      if (p === effectiveActive) active = true;
     }
     return { locked, active };
   };
@@ -123,104 +154,106 @@ export default function PeriodSlider({
           )}
         </button>
 
-        {/* ── Mobile: month grid with expandable sub-periods ── */}
+        {/* ── Mobile: month grid with expandable sub-periods ──
+            Each month is a STABLE element (never remounts on expand/collapse)
+            so the width (flex-grow) animates and the collapsed bar crossfades
+            with the expanded E/M/L group. */}
         <div className="flex md:hidden flex-col flex-1 min-w-0 gap-0">
           <div className="flex items-stretch gap-px">
             {MONTHS.map((m, mi) => {
               const isExpanded = expandedMonth === mi;
               const { locked: monthLocked, active: monthActive } = monthLockState(mi);
+              const isMonthLoading = monthHasLoading(mi);
+              const expand = () => expandMonth(mi);
 
-              if (isExpanded) {
-                // Show 3 sub-period buttons for this month — visually distinct
-                return (
-                  <div key={m} className="flex flex-col flex-[3] gap-px transition-[flex-grow] duration-150">
-                    <div className="flex gap-1">
+              return (
+                <div
+                  key={m}
+                  className={`flex flex-col gap-px min-w-0 transition-[flex-grow] duration-300 ease-out ${isExpanded ? "flex-[3]" : "flex-1"}`}
+                >
+                  <div className="relative h-8">
+                    {/* Collapsed bar */}
+                    <button
+                      type="button"
+                      onClick={expand}
+                      tabIndex={isExpanded ? -1 : 0}
+                      aria-hidden={isExpanded}
+                      title={m}
+                      className={`absolute inset-0 rounded-sm transition-opacity duration-200 ease-out
+                        ${isExpanded ? "opacity-0 pointer-events-none" : "opacity-100"}
+                        ${isExpanded
+                          ? "bg-gray-200"
+                          : monthLocked
+                            ? "bg-blue-700 shadow-sm ring-2 ring-inset ring-white/60"
+                            : monthActive
+                              ? "bg-blue-500 shadow-sm"
+                              : "bg-gray-200 active:bg-blue-200"}
+                        ${isMonthLoading && !isExpanded ? "animate-pulse" : ""}`}
+                    >
+                      {monthLocked && (
+                        <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white">✓</span>
+                      )}
+                    </button>
+
+                    {/* Expanded E / M / L */}
+                    <div
+                      aria-hidden={!isExpanded}
+                      className={`absolute inset-0 flex gap-1 transition-opacity duration-200 ease-out
+                        ${isExpanded ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+                    >
                       {[0, 1, 2].map((s) => {
-                        const pIdx = mi * 3 + s;
-                        const p = periods[pIdx];
+                        const p = periods[mi * 3 + s];
                         if (p === undefined) return null;
                         const isLocked = lockedPeriods.has(p);
-                        const isActive = p === activePeriod;
+                        const isActive = p === effectiveActive;
                         const isLoading = loadingPeriods.has(p);
                         return (
                           <button
-                            key={p}
-                            onClick={() => { onClickPeriod(p); }}
+                            key={s}
+                            type="button"
+                            onClick={() => { cancelPreview(); setPreviewActive(p); onClickPeriod(p); }}
+                            tabIndex={isExpanded ? 0 : -1}
                             title={periodToLabel(p, periodLabels)}
-                            className={`
-                              flex-1 min-w-[14px] h-8 rounded border text-[11px] font-semibold transition-all duration-150 relative
+                            className={`flex-1 min-w-[14px] h-8 rounded border text-[11px] font-semibold transition-colors duration-150 relative
                               ${isLocked
                                 ? "bg-blue-700 text-white border-blue-700 shadow-sm"
                                 : isActive
                                   ? "bg-blue-500 text-white border-blue-500 shadow-sm"
-                                  : "bg-white text-gray-600 border-gray-300 active:bg-blue-100"
-                              }
-                              ${isLoading ? "animate-pulse" : ""}
-                            `}
+                                  : "bg-white text-gray-600 border-gray-300 active:bg-blue-100"}
+                              ${isLoading ? "animate-pulse" : ""}`}
                           >
                             {PERIOD_POS[s]}
                             {isLocked && (
-                              <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-blue-700 ring-1 ring-white text-[8px] leading-3 text-white">
-                                ✓
-                              </span>
+                              <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-blue-700 ring-1 ring-white text-[8px] leading-3 text-white">✓</span>
                             )}
                           </button>
                         );
                       })}
                     </div>
-                    <button
-                      onClick={() => {
-                        const monthPeriods = [0, 1, 2]
-                          .map((s) => periods[mi * 3 + s])
-                          .filter((p): p is number => p !== undefined);
-                        onToggleMonth(monthPeriods);
-                      }}
-                      className="text-center text-[9px] text-blue-600 font-semibold leading-tight tracking-tight py-0.5 -my-0.5 active:text-blue-800"
-                      title={`Lock/unlock all of ${m}`}
-                    >
-                      {m}{monthLocked && monthAllLocked(mi) ? " ✓" : ""}
-                    </button>
                   </div>
-                );
-              }
 
-              // Collapsed month: one tappable cell
-              const isMonthLoading = monthHasLoading(mi);
-              return (
-                <button
-                  key={m}
-                  onClick={() => {
-                    setExpandedMonth(mi);
-                    const midP = periods[mi * 3 + 1];
-                    if (midP !== undefined) {
-                      onSetActive(midP);
-                    }
-                  }}
-                  className="flex flex-col flex-1 gap-px transition-[flex-grow] duration-150 min-w-0"
-                  title={m}
-                >
-                  <span
-                    className={`
-                      block h-8 w-full rounded-sm transition-all duration-150 relative
-                      ${monthLocked
-                        ? "bg-blue-700 shadow-sm ring-2 ring-inset ring-white/60"
-                        : monthActive
-                          ? "bg-blue-500 shadow-sm"
-                          : "bg-gray-200 active:bg-blue-200"
-                      }
-                      ${isMonthLoading ? "animate-pulse" : ""}
-                    `}
+                  {/* Label: tap to expand (collapsed) or lock/unlock the whole month (expanded) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!isExpanded) { expand(); return; }
+                      cancelPreview();
+                      const monthPeriods = [0, 1, 2]
+                        .map((s) => periods[mi * 3 + s])
+                        .filter((p): p is number => p !== undefined);
+                      onToggleMonth(monthPeriods);
+                    }}
+                    title={isExpanded ? `Lock/unlock all of ${m}` : m}
+                    className={`text-center text-[9px] leading-tight tracking-tight py-0.5 -my-0.5 transition-colors duration-200
+                      ${isExpanded
+                        ? "text-blue-600 font-semibold active:text-blue-800"
+                        : monthLocked
+                          ? "text-blue-700 font-semibold"
+                          : "text-gray-500"}`}
                   >
-                    {monthLocked && (
-                      <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white">
-                        ✓
-                      </span>
-                    )}
-                  </span>
-                  <span className={`block text-center text-[9px] leading-tight tracking-tight ${monthLocked ? "text-blue-700 font-semibold" : "text-gray-500"}`}>
-                    {m}
-                  </span>
-                </button>
+                    {m}{isExpanded && monthLocked && monthAllLocked(mi) ? " ✓" : ""}
+                  </button>
+                </div>
               );
             })}
           </div>

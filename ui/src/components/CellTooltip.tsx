@@ -102,50 +102,6 @@ function SafetySourceLinks({ country, pinned }: { country: CountryInfo; pinned?:
   );
 }
 
-function MobileSummary({
-  dataMap, manifest, displayVariable, displayStat, filterResults,
-}: {
-  dataMap: Map<string, CellStats>;
-  manifest: Manifest;
-  displayVariable: string;
-  displayStat: string;
-  filterResults: { passes: boolean }[];
-}) {
-  const varData = dataMap.get(displayVariable);
-  const varInfo = manifest.variables[displayVariable];
-  // Headline mirrors what the map is currently colored by: variable + stat.
-  const value = varData?.stats[displayStat];
-  const passCount = filterResults.filter((r) => r.passes).length;
-  const failCount = filterResults.length - passCount;
-
-  return (
-    <div className="flex items-center gap-2 text-[11px]">
-      {varData && !varInfo?.categorical && (
-        <span className="text-gray-600 truncate">
-          {SHORT_LABELS[displayVariable] ?? varData.label} · {STAT_LABELS[displayStat] ?? displayStat}:{" "}
-          <span className="font-semibold text-gray-800 tabular-nums">
-            {value !== null && value !== undefined ? value.toFixed(1) : "—"}
-          </span>{" "}
-          <span className="text-gray-400">{varData.units}</span>
-        </span>
-      )}
-      {filterResults.length > 0 && (
-        <span className="ml-auto flex items-center gap-1 shrink-0">
-          {failCount === 0 ? (
-            <span className="rounded-full bg-green-100 text-green-700 px-1.5 py-px font-medium">
-              ✓ all {passCount} filters
-            </span>
-          ) : (
-            <span className="rounded-full bg-red-100 text-red-600 px-1.5 py-px font-medium">
-              ✗ fails {failCount}/{filterResults.length}
-            </span>
-          )}
-        </span>
-      )}
-    </div>
-  );
-}
-
 function StatCells({
   varData, filterMap, manifest,
 }: {
@@ -363,38 +319,58 @@ export default function CellTooltip({ hoveredCell, manifest, displayVariable, di
     </div>
   );
 
+  // Headline metric mirrors what the map is colored by (variable + stat).
+  const summaryVar = dataMap.get(displayVariable);
+  const summaryVarInfo = manifest.variables[displayVariable];
+  const summaryValue = summaryVar?.stats[displayStat];
+  const passCount = filterResults.filter((r) => r.passes).length;
+  const failCount = filterResults.length - passCount;
+
   return (
     <div
       ref={tooltipRef}
-      className={`fixed z-50 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-gray-200 
+      className={`fixed z-50 bg-white/95 backdrop-blur-sm border border-gray-200 shadow-lg
+                 rounded-lg max-md:rounded-2xl max-md:shadow-xl
                  max-md:bottom-[calc(env(safe-area-inset-bottom)+76px)] max-md:left-4 max-md:right-4 max-md:top-auto
                  md:left-[var(--hover-left)] md:top-[var(--hover-top)] md:w-max
-                 px-2.5 py-2 sm:px-3 sm:py-2 text-[10px] sm:text-xs overflow-hidden
-                 ${pinned ? "pointer-events-auto ring-2 ring-blue-400/50" : "pointer-events-none"}`}
+                 px-2.5 py-2 sm:px-3 sm:py-2 max-md:px-3.5 max-md:py-3 text-[10px] sm:text-xs overflow-hidden
+                 ${pinned ? "pointer-events-auto ring-2 ring-blue-400/50" : "pointer-events-none"}
+                 ${isMobile && !expanded && data.length > 0 ? "cursor-pointer" : ""}`}
       style={
         {
           "--hover-left": `${left}px`,
           "--hover-top": `${top}px`,
         } as React.CSSProperties
       }
-      onClick={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        // Collapsed card: a tap anywhere opens it (not just the chevron).
+        if (isMobile && !expanded && data.length > 0) setExpanded(true);
+      }}
     >
-      <div className={`font-medium text-gray-700 flex items-center gap-2 ${isMobile && !expanded ? "mb-0.5" : "mb-1.5"}`}>
-        <span className="truncate">
-          {country?.name && (
-            <span className="text-gray-900">{country.name} · </span>
-          )}
-          {formatLat(lat)}, {formatLon(lon)}
-        </span>
-        {loading && (
-          <span className="inline-block w-3 h-3 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin shrink-0" />
-        )}
-        {isMobile && (
-          <span className="ml-auto flex items-center gap-1 shrink-0 pointer-events-auto">
+      {isMobile ? (
+        /* ── Mobile: place + headline metric, always visible. Tap to expand. ── */
+        <div className="select-none">
+          <div className="flex items-start gap-1">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="font-semibold text-gray-900 text-sm truncate">
+                  {country?.name ?? `${formatLat(lat)}, ${formatLon(lon)}`}
+                </span>
+                {loading && (
+                  <span className="inline-block w-3 h-3 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin shrink-0" />
+                )}
+              </div>
+              {country?.name && (
+                <div className="text-[11px] text-gray-400 leading-tight truncate">
+                  {formatLat(lat)}, {formatLon(lon)}
+                </div>
+              )}
+            </div>
             <button
-              onClick={() => setExpanded((v) => !v)}
-              aria-label={expanded ? "Show less" : "Show all variables"}
-              className="w-7 h-7 flex items-center justify-center text-gray-400 active:text-gray-600"
+              onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+              aria-label={expanded ? "Show less" : "Show all stats"}
+              className="w-7 h-7 -mt-0.5 flex items-center justify-center text-gray-400 active:text-gray-600 shrink-0"
             >
               <svg
                 className={`w-4 h-4 transition-transform ${expanded ? "rotate-180" : ""}`}
@@ -404,37 +380,63 @@ export default function CellTooltip({ hoveredCell, manifest, displayVariable, di
               </svg>
             </button>
             <button
-              onClick={onDismiss ?? onUnpin}
+              onClick={(e) => { e.stopPropagation(); (onDismiss ?? onUnpin)?.(); }}
               aria-label="Close"
-              className="w-7 h-7 flex items-center justify-center text-gray-400 active:text-gray-600 text-lg leading-none"
+              className="w-7 h-7 -mt-0.5 -mr-1 flex items-center justify-center text-gray-400 active:text-gray-600 text-lg leading-none shrink-0"
             >
               ×
             </button>
-          </span>
-        )}
-        {!isMobile && pinned && (
-          <button
-            onClick={onUnpin}
-            className="ml-auto text-gray-400 hover:text-gray-600 text-sm leading-none px-1 pointer-events-auto"
-            title="Unpin (Esc)"
-          >
-            ×
-          </button>
-        )}
-        {!isMobile && !pinned && (
-          <span className="ml-auto text-[9px] text-gray-300 hidden md:inline">click to pin</span>
-        )}
-      </div>
+          </div>
 
-      {/* Mobile: always-visible summary of the displayed layer + filter verdict */}
-      {isMobile && (
-        <MobileSummary
-          dataMap={dataMap}
-          manifest={manifest}
-          displayVariable={displayVariable}
-          displayStat={displayStat}
-          filterResults={filterResults}
-        />
+          <div className="flex items-end justify-between gap-3 mt-1">
+            {summaryVar && !summaryVarInfo?.categorical ? (
+              <div className="min-w-0">
+                <div className="text-[10px] uppercase tracking-wide text-gray-400 truncate">
+                  {SHORT_LABELS[displayVariable] ?? summaryVar.label} · {STAT_LABELS[displayStat] ?? displayStat}
+                </div>
+                <div className="text-lg font-semibold text-gray-900 tabular-nums leading-tight">
+                  {summaryValue != null ? summaryValue.toFixed(1) : "—"}
+                  <span className="text-xs font-normal text-gray-400 ml-0.5">{summaryVar.units}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="text-xs text-gray-500 truncate">{summaryVar?.label ?? ""}</div>
+            )}
+            {filterResults.length > 0 && (
+              failCount === 0 ? (
+                <span className="shrink-0 inline-flex items-center rounded-full bg-green-100 text-green-700 text-[11px] font-semibold px-2 py-0.5">
+                  ✓ Passes all {passCount}
+                </span>
+              ) : (
+                <span className="shrink-0 inline-flex items-center rounded-full bg-red-100 text-red-600 text-[11px] font-semibold px-2 py-0.5">
+                  ✗ Fails {failCount}/{filterResults.length}
+                </span>
+              )
+            )}
+          </div>
+        </div>
+      ) : (
+        /* ── Desktop header ── */
+        <div className="font-medium text-gray-700 flex items-center gap-2 mb-1.5">
+          <span className="truncate">
+            {country?.name && <span className="text-gray-900">{country.name} · </span>}
+            {formatLat(lat)}, {formatLon(lon)}
+          </span>
+          {loading && (
+            <span className="inline-block w-3 h-3 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin shrink-0" />
+          )}
+          {pinned ? (
+            <button
+              onClick={onUnpin}
+              className="ml-auto text-gray-400 hover:text-gray-600 text-sm leading-none px-1 pointer-events-auto"
+              title="Unpin (Esc)"
+            >
+              ×
+            </button>
+          ) : (
+            <span className="ml-auto text-[9px] text-gray-300 hidden md:inline">click to pin</span>
+          )}
+        </div>
       )}
 
       {/* Mobile: failing filters + table live in an animated 0fr->1fr container */}

@@ -24,22 +24,59 @@ interface Props {
   label?: string;
   /** Compact label shown on the trigger button on mobile (full label stays in the sheet). */
   shortLabels?: Record<string, string>;
-  /** Optional "About" content. On mobile it opens as an in-sheet sub-page with a back button. */
+  /** Optional "About" content for the selected value. On mobile it opens as an in-sheet sub-page with a back button. */
   renderInfo?: () => ReactNode;
   /** Title for the in-sheet About sub-page (e.g. the layer name). */
   infoTitle?: string;
+  /** Per-option "About" content. When it returns non-null, that row shows an (i) opening the same sub-page for that option (mobile only). */
+  renderOptionInfo?: (value: string) => ReactNode;
+  /** Title for a per-option About sub-page (defaults to the option label). */
+  optionInfoTitle?: (value: string) => string;
 }
 
-export default function CustomSelect({ value, onChange, options, groups, className, minWidth = "120px", label, shortLabels, renderInfo, infoTitle }: Props) {
+export default function CustomSelect({ value, onChange, options, groups, className, minWidth = "120px", label, shortLabels, renderInfo, infoTitle, renderOptionInfo, optionInfoTitle }: Props) {
   const [open, setOpen] = useState(false);
-  const [showInfo, setShowInfo] = useState(false);
+  // Holds the About sub-page to show (selected value or a tapped option); null = option list.
+  const [info, setInfo] = useState<{ node: ReactNode; title: string } | null>(null);
+  // Drives the slide-in: mount the panel off-screen, then flip on the next frame.
+  // `infoShown` (not `info`) drives the header so it reverts the instant you tap
+  // back; `info` lingers only to keep the panel content mounted while it slides.
+  const [infoShown, setInfoShown] = useState(false);
+  const infoCloseTimer = useRef<number | null>(null);
+
+  const clearInfoTimer = () => {
+    if (infoCloseTimer.current !== null) {
+      clearTimeout(infoCloseTimer.current);
+      infoCloseTimer.current = null;
+    }
+  };
+
+  const openInfoPage = (node: ReactNode, title: string) => {
+    clearInfoTimer();
+    setInfo({ node, title });
+    requestAnimationFrame(() => requestAnimationFrame(() => setInfoShown(true)));
+  };
+  const closeInfoPage = () => {
+    setInfoShown(false);
+    // Unmount the panel after the slide-out. transitionend clears it too, but
+    // that event is unreliable on mobile Safari, so this guarantees cleanup.
+    clearInfoTimer();
+    infoCloseTimer.current = window.setTimeout(() => {
+      setInfo(null);
+      infoCloseTimer.current = null;
+    }, 350);
+  };
   const containerRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const sheet = useBottomSheet(open && isMobile, () => setOpen(false));
 
   // Always return to the option list when the sheet (re)opens or closes.
   useEffect(() => {
-    if (!open) setShowInfo(false);
+    if (!open) {
+      setInfo(null);
+      setInfoShown(false);
+      clearInfoTimer();
+    }
   }, [open]);
 
   useEffect(() => {
@@ -73,21 +110,37 @@ export default function CustomSelect({ value, onChange, options, groups, classNa
     setOpen(false);
   };
 
+  // Per-row (i) is mobile-only (desktop has its own inline info button); only
+  // shown when renderOptionInfo returns content for that option.
+  const renderItem = (opt: SelectOption) => {
+    const infoNode = isMobile ? renderOptionInfo?.(opt.value) : null;
+    return (
+      <Item
+        key={opt.value}
+        opt={opt}
+        selected={opt.value === value}
+        mobile={isMobile}
+        onSelect={select}
+        onShowInfo={
+          infoNode != null
+            ? () => openInfoPage(infoNode, optionInfoTitle?.(opt.value) ?? opt.label)
+            : undefined
+        }
+      />
+    );
+  };
+
   const optionList = groups ? (
     groups.map((group) => (
       <div key={group.label}>
         <div className="px-4 md:px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
           {group.label}
         </div>
-        {group.options.map((opt) => (
-          <Item key={opt.value} opt={opt} selected={opt.value === value} mobile={isMobile} onSelect={select} />
-        ))}
+        {group.options.map(renderItem)}
       </div>
     ))
   ) : (
-    allOptions.map((opt) => (
-      <Item key={opt.value} opt={opt} selected={opt.value === value} mobile={isMobile} onSelect={select} />
-    ))
+    allOptions.map(renderItem)
   );
 
   return (
@@ -121,7 +174,8 @@ export default function CustomSelect({ value, onChange, options, groups, classNa
             onClick={sheet.requestClose}
           />
           <div
-            className={`fixed inset-x-0 bottom-0 z-[80] bg-white rounded-t-2xl shadow-2xl flex flex-col max-h-[70dvh] pb-[env(safe-area-inset-bottom)]
+            className={`fixed inset-x-0 bottom-0 z-[80] bg-white rounded-t-2xl shadow-2xl flex flex-col pb-[env(safe-area-inset-bottom)]
+                        ${renderInfo || renderOptionInfo ? "h-[70dvh]" : "max-h-[70dvh]"}
                         ${sheet.dragging ? "" : "transition-transform duration-300 ease-out"} ${sheet.translateClass}`}
             style={sheet.style}
             onTransitionEnd={sheet.onTransitionEnd}
@@ -130,63 +184,72 @@ export default function CustomSelect({ value, onChange, options, groups, classNa
               <div className="w-10 h-1 rounded-full bg-gray-300" />
             </div>
 
-            {showInfo && renderInfo ? (
-              <>
-                {/* About sub-page: back returns to the list, drawer stays open */}
-                <div className="flex items-center gap-1 px-2 py-1.5 border-b border-gray-100 shrink-0">
-                  <button
-                    onClick={() => setShowInfo(false)}
-                    aria-label="Back"
-                    className="w-9 h-9 flex items-center justify-center text-gray-500 active:text-gray-800 shrink-0"
-                  >
-                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="15 18 9 12 15 6" />
-                    </svg>
-                  </button>
-                  <div className="min-w-0 flex-1">
+            {/* Persistent header: the close button keeps the same size and
+                position whether or not the back button is showing — only the
+                left side and body change. */}
+            <div
+              className="flex items-center px-2 py-1.5 border-b border-gray-100 shrink-0"
+              {...(infoShown ? {} : sheet.handleProps)}
+            >
+              {/* Back button: always mounted, animates its width so the title
+                  slides left when it appears and right when it leaves. */}
+              <button
+                onClick={closeInfoPage}
+                aria-label="Back"
+                tabIndex={infoShown ? 0 : -1}
+                className={`h-9 flex items-center justify-center text-gray-500 active:text-gray-800 shrink-0 overflow-hidden transition-all duration-300 ease-out ${infoShown ? "w-9 opacity-100" : "w-0 opacity-0"}`}
+              >
+                <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+              <div className="min-w-0 flex-1 px-2">
+                {infoShown ? (
+                  <>
                     <div className="text-[10px] uppercase tracking-wider text-gray-400 leading-none">About</div>
-                    <div className="text-sm font-semibold text-gray-800 truncate">{infoTitle ?? label}</div>
-                  </div>
-                  <button
-                    onClick={sheet.requestClose}
-                    aria-label="Close"
-                    className="w-9 h-9 flex items-center justify-center text-gray-400 active:text-gray-600 text-xl leading-none shrink-0"
-                  >
-                    ×
-                  </button>
-                </div>
-                <div className="overflow-y-auto overscroll-contain px-4 py-3 flex-1 min-h-0">
-                  {renderInfo()}
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 shrink-0" {...sheet.handleProps}>
+                    <div className="text-sm font-semibold text-gray-800 truncate">{info?.title}</div>
+                  </>
+                ) : (
                   <span className="text-sm font-semibold text-gray-700">{label ?? "Select"}</span>
-                  <div className="flex items-center gap-1">
-                    {renderInfo && (
-                      <button
-                        onClick={() => setShowInfo(true)}
-                        className="flex items-center gap-1 rounded-full border border-gray-300 text-gray-500 active:text-blue-600 active:border-blue-300 px-2 h-7 text-xs"
-                      >
-                        <span className="w-4 h-4 rounded-full border border-current text-[10px] leading-none flex items-center justify-center">i</span>
-                        About
-                      </button>
-                    )}
-                    <button
-                      onClick={sheet.requestClose}
-                      aria-label="Close"
-                      className="w-8 h-8 -mr-1 flex items-center justify-center text-gray-400 active:text-gray-600 text-xl leading-none"
-                    >
-                      ×
-                    </button>
-                  </div>
+                )}
+              </div>
+              {!infoShown && renderInfo && !renderOptionInfo && (
+                <button
+                  onClick={() => openInfoPage(renderInfo(), infoTitle ?? label ?? "About")}
+                  className="flex items-center gap-1 rounded-full border border-gray-300 text-gray-500 active:text-blue-600 active:border-blue-300 px-2 h-7 text-xs shrink-0 mr-1"
+                >
+                  <span className="w-4 h-4 rounded-full border border-current text-[10px] leading-none flex items-center justify-center">i</span>
+                  About
+                </button>
+              )}
+              <button
+                onClick={sheet.requestClose}
+                aria-label="Close"
+                className="w-9 h-9 flex items-center justify-center text-gray-400 active:text-gray-600 text-xl leading-none shrink-0"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Body: option list, with the About page sliding in over it. */}
+            <div className="relative flex-1 min-h-0 overflow-hidden">
+              <div role="listbox" className="absolute inset-0 overflow-y-auto overscroll-contain py-1">
+                {optionList}
+              </div>
+              {info && (
+                <div
+                  className={`absolute inset-0 bg-white overflow-y-auto overscroll-contain px-4 py-3 shadow-[-8px_0_24px_rgba(0,0,0,0.06)] transition-transform duration-300 ease-out ${infoShown ? "translate-x-0" : "translate-x-full"}`}
+                  onTransitionEnd={(e) => {
+                    if (e.propertyName === "transform" && !infoShown) {
+                      clearInfoTimer();
+                      setInfo(null);
+                    }
+                  }}
+                >
+                  {info.node}
                 </div>
-                <div role="listbox" className="overflow-y-auto overscroll-contain py-1 flex-1 min-h-0">
-                  {optionList}
-                </div>
-              </>
-            )}
+              )}
+            </div>
           </div>
         </>
       )}
@@ -194,22 +257,41 @@ export default function CustomSelect({ value, onChange, options, groups, classNa
   );
 }
 
-function Item({ opt, selected, mobile, onSelect }: { opt: SelectOption; selected: boolean; mobile: boolean; onSelect: (v: string) => void }) {
+function Item({ opt, selected, mobile, onSelect, onShowInfo }: { opt: SelectOption; selected: boolean; mobile: boolean; onSelect: (v: string) => void; onShowInfo?: () => void }) {
   return (
-    <button
-      role="option"
-      aria-selected={selected}
-      onClick={() => onSelect(opt.value)}
-      className={`w-full text-left cursor-pointer truncate flex items-center justify-between gap-2
-        ${mobile ? "px-4 py-2.5 text-[15px]" : "px-3 py-1.5 text-sm"}
-        ${selected ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700 hover:bg-gray-50 active:bg-gray-100"}`}
+    <div
+      className={`flex items-center ${mobile ? "pr-3" : "pr-2"}
+        ${selected ? "bg-blue-50" : "hover:bg-gray-50 active:bg-gray-100"}`}
     >
-      <span className="truncate">{opt.label}</span>
+      <button
+        role="option"
+        aria-selected={selected}
+        onClick={() => onSelect(opt.value)}
+        className={`flex-1 min-w-0 text-left cursor-pointer truncate
+          ${mobile ? "pl-4 py-2.5 text-[15px]" : "pl-3 py-1.5 text-sm"}
+          ${selected ? "text-blue-700 font-medium" : "text-gray-700"}`}
+      >
+        <span className="block truncate">{opt.label}</span>
+      </button>
       {selected && (
-        <svg className="w-4 h-4 shrink-0 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg className="w-4 h-4 shrink-0 ml-2 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="20 6 9 17 4 12" />
         </svg>
       )}
-    </button>
+      {onShowInfo && (
+        <button
+          onClick={onShowInfo}
+          aria-label={`About ${opt.label}`}
+          title="About"
+          className="shrink-0 ml-1 w-9 h-9 flex items-center justify-center text-gray-300 active:text-blue-600 transition-colors"
+        >
+          <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="11" x2="12" y2="16" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
+          </svg>
+        </button>
+      )}
+    </div>
   );
 }

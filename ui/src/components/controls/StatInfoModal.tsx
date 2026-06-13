@@ -9,7 +9,7 @@ const STATS = [
     name: "Mean",
     key: "mean",
     description: "Average value across all days in this period, pooled over 11 years (~110 daily values). Represents the typical condition.",
-    tip: "Use this for general comparisons — \"what's the weather usually like here in early March?\"",
+    tip: "Use this for general comparisons: \"what's the weather usually like here in early March?\"",
   },
   {
     name: "Median",
@@ -20,38 +20,38 @@ const STATS = [
   {
     name: "P10",
     key: "p10",
-    description: "10th percentile — 90% of days have a value higher than this. Represents the lower end of what to expect.",
+    description: "10th percentile, 90% of days have a value higher than this. Represents the lower end of what to expect.",
     tip: "For temperature: the coldest days you'll encounter. For precipitation: the driest days.",
   },
   {
     name: "P90",
     key: "p90",
-    description: "90th percentile — only 10% of days exceed this. Represents the upper end of what to expect.",
+    description: "90th percentile, only 10% of days exceed this. Represents the upper end of what to expect.",
     tip: "For temperature: how hot can it get. For wind: the gusty days. Good for planning worst-case.",
   },
   {
     name: "Min",
     key: "min",
     description: "Absolute minimum observed across all 11 years. The most extreme low value ever recorded in this period.",
-    tip: "Rare events — don't plan around these, but useful to know the extremes.",
+    tip: "Rare events, don't plan around these, but useful to know the extremes.",
   },
   {
     name: "Max",
     key: "max",
     description: "Absolute maximum observed across all 11 years. The most extreme high value ever recorded in this period.",
-    tip: "Same as min — shows the tail of the distribution.",
+    tip: "Same as min, shows the tail of the distribution.",
   },
   {
     name: "Year Std (σyr)",
     key: "ystd",
     description: "Standard deviation of per-year period averages. Measures how much the typical value for this period varies from one year to the next.",
-    tip: "Low σyr = reliable climate (similar every year). High σyr = volatile (some years much warmer/wetter than others). Useful for trip planning — a low mean with high σyr means you might get unlucky.",
+    tip: "Low σyr = reliable climate (similar every year). High σyr = volatile (some years much warmer/wetter than others). Useful for trip planning, a low mean with high σyr means you might get unlucky.",
   },
 ];
 
 const EVENT_NOTE = "For event-frequency variables (Rainy Days, Hot Days, etc.), all stats are computed across per-year fractions, not individual days. Mean = typical fraction of event days, P10/P90 = the range across years.";
 
-/** Just the content — reused by the desktop modal and the mobile in-sheet page. */
+/** Just the content, reused by the desktop modal and the mobile in-sheet page. */
 export function StatInfoBody() {
   return (
     <div className="space-y-4">

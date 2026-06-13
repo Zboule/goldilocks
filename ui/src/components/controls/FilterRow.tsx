@@ -46,7 +46,7 @@ function NumberInput({ value, onCommit }: { value: number; onCommit: (v: number)
         const parsed = parseFloat(raw);
         if (Number.isFinite(parsed)) onCommit(parsed);
       }}
-      className="w-16 md:w-14 rounded border border-gray-300 bg-white px-1.5 py-1.5 md:py-0.5 text-[16px] md:text-xs tabular-nums text-center"
+      className="w-16 md:w-14 h-9 md:h-7 rounded border border-gray-300 bg-white px-1.5 text-[16px] md:text-xs tabular-nums text-center"
     />
   );
 }
@@ -57,7 +57,9 @@ export default function FilterRow({ filter, manifest, onChange, onRemove }: Prop
   const isBetween = filter.operator === "between";
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50 p-1.5 space-y-1">
+    <div className="rounded-lg border border-gray-200 bg-gray-50 p-1.5 space-y-1.5">
+      {/* Row 1: layer + statistic + remove. Stat is a fixed width so swapping
+          labels (Mean ↔ Year Std) doesn't shift the layer field. */}
       <div className="flex items-center gap-1.5">
         <VariableSelect
           value={filter.variable}
@@ -71,27 +73,27 @@ export default function FilterRow({ filter, manifest, onChange, onRemove }: Prop
           className="text-xs flex-1 min-w-0"
           label="Filter variable"
         />
+        {!isCategorical && (
+          <StatSelect
+            value={filter.stat}
+            onChange={(s) => onChange({ stat: s })}
+            stats={manifest.stats}
+            className="text-xs shrink-0 w-24 md:w-28"
+          />
+        )}
         <button
           onClick={onRemove}
-          className="w-8 h-8 md:w-auto md:h-auto flex items-center justify-center text-gray-400 hover:text-red-500 active:text-red-500 transition-colors text-lg md:text-sm leading-none md:px-1 shrink-0"
+          className="shrink-0 w-9 h-9 md:w-7 md:h-7 flex items-center justify-center rounded text-gray-400 hover:text-red-500 hover:bg-red-50 active:text-red-500 active:bg-red-50 transition-colors text-xl md:text-base leading-none"
           title="Remove filter"
           aria-label="Remove filter"
         >
           ×
         </button>
       </div>
+      {/* Row 2: operator + value(s) */}
       <div className="flex items-center gap-1.5 flex-wrap">
-        {!isCategorical && (
-          <StatSelect
-            value={filter.stat}
-            onChange={(s) => onChange({ stat: s })}
-            stats={manifest.stats}
-            className="text-xs shrink-0 w-24 md:w-auto"
-          />
-        )}
-
         {/* Operator: segmented control — every option visible, thumb-sized */}
-        <div className="flex rounded border border-gray-300 bg-white overflow-hidden shrink-0" role="radiogroup" aria-label="Operator">
+        <div className="flex rounded border border-gray-300 bg-white overflow-hidden shrink-0 h-9 md:h-7" role="radiogroup" aria-label="Operator">
           {OPERATORS.map((op, i) => (
             <button
               key={op.value}
@@ -107,7 +109,7 @@ export default function FilterRow({ filter, manifest, onChange, onRemove }: Prop
                 }
                 onChange(patch);
               }}
-              className={`px-2.5 md:px-2 py-1.5 md:py-0.5 text-xs font-medium transition-colors
+              className={`flex items-center px-2.5 md:px-2 text-xs font-medium transition-colors
                 ${i > 0 ? "border-l border-gray-200" : ""}
                 ${filter.operator === op.value
                   ? "bg-blue-500 text-white"
@@ -126,7 +128,7 @@ export default function FilterRow({ filter, manifest, onChange, onRemove }: Prop
         )}
 
         {isBetween && (
-          <div className="flex items-center gap-1.5 basis-full md:basis-auto">
+          <div className="flex items-center gap-1.5">
             <NumberInput value={filter.value} onCommit={(v) => onChange({ value: v })} />
             <span className="text-[10px] text-gray-400">to</span>
             <NumberInput value={filter.value2 ?? 0} onCommit={(v) => onChange({ value2: v })} />

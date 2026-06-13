@@ -19,8 +19,8 @@ const STAT_NOTES: Record<string, string> = {
   ystd: "Year-to-year variability (σ) of this period's typical value. Lower = more consistent from one year to the next.",
   min: "Lowest value observed across all years (2013–2023) for the selected period(s).",
   max: "Highest value observed across all years for the selected period(s).",
-  p10: "10th percentile — only 1 in 10 days falls below this.",
-  p90: "90th percentile — the typical high end; 1 in 10 days exceeds it.",
+  p10: "10th percentile, only 1 in 10 days falls below this.",
+  p90: "90th percentile, the typical high end; 1 in 10 days exceeds it.",
 };
 
 const SAFETY_LABELS: [number, string][] = [

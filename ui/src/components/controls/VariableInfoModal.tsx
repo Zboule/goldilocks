@@ -53,6 +53,9 @@ export function VariableInfoBody({ variableKey }: { variableKey: string }) {
   }
   return (
     <dl className="space-y-3">
+      {detail.plain && (
+        <p className="text-[13px] text-gray-600 leading-relaxed">{detail.plain}</p>
+      )}
       {detail.ranges && detail.ranges.length > 0 && (
         <RangeTable ranges={detail.ranges} variableKey={variableKey} />
       )}

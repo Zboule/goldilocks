@@ -11,8 +11,6 @@ interface Props {
   onUpdate: (id: string, patch: Partial<Filter>) => void;
   onClear: () => void;
   onLoadPreset: (filters: Omit<Filter, "id">[]) => void;
-  /** Called after a preset is applied (mobile closes the sheet so the result is visible). */
-  onPresetApplied?: () => void;
 }
 
 export default function FilterPanel({
@@ -23,7 +21,6 @@ export default function FilterPanel({
   onUpdate,
   onClear,
   onLoadPreset,
-  onPresetApplied,
 }: Props) {
   const hasSafetyVariable = "travel_safety" in manifest.variables;
   // Derived, not stored: the toggle reflects what the filter list actually contains.
@@ -35,9 +32,8 @@ export default function FilterPanel({
     (presetFilters: Omit<Filter, "id">[]) => {
       const base = presetFilters.filter((f) => f.variable !== "travel_safety");
       onLoadPreset(safeOnly && hasSafetyVariable ? [...base, SAFETY_FILTER] : base);
-      onPresetApplied?.();
     },
-    [safeOnly, hasSafetyVariable, onLoadPreset, onPresetApplied],
+    [safeOnly, hasSafetyVariable, onLoadPreset],
   );
 
   const handleSafeToggle = useCallback(() => {
@@ -65,7 +61,7 @@ export default function FilterPanel({
       {/* Presets + Safe toggle */}
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+          <span className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">
             Presets
           </span>
         </div>
@@ -112,10 +108,10 @@ export default function FilterPanel({
       )}
 
       {/* Active filters */}
-      <div className="flex flex-col gap-1.5" data-active-filters>
+      <div className="flex flex-col gap-1.5 mt-1 pt-3" data-active-filters>
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">
-            Active Filters
+          <span className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">
+            Filters
           </span>
           <button
             onClick={() => onAdd()}
@@ -139,7 +135,7 @@ export default function FilterPanel({
 
         {filters.length === 0 ? (
           <span className="text-xs text-gray-400 italic">
-            No filters — all land cells shown
+            No filters, all land cells shown
           </span>
         ) : (
           <div className="flex flex-col gap-2">

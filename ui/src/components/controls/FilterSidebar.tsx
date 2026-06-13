@@ -3,6 +3,7 @@ import type { Filter, Manifest } from "../../types";
 import FilterPanel from "./FilterPanel";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { useBottomSheet } from "../../hooks/useBottomSheet";
+import { useThemeColorDim } from "../../hooks/useThemeColorDim";
 
 interface Props {
   open: boolean;
@@ -30,6 +31,11 @@ export default function FilterSidebar({
   const isMobile = useIsMobile();
   const sheet = useBottomSheet(open && isMobile, onClose);
 
+  // Ease iOS Safari's chrome along with the dim backdrop (matches the 300ms
+  // opacity fade below). `opened` is recomputed in the mobile branch too.
+  const opened = sheet.translateClass === "translate-y-0";
+  useThemeColorDim(isMobile && opened);
+
   // Always open scrolled to the top (Presets first).
   const contentRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -54,7 +60,6 @@ export default function FilterSidebar({
       onUpdate={onUpdate}
       onClear={onClear}
       onLoadPreset={onLoadPreset}
-      onPresetApplied={isMobile ? sheet.requestClose : undefined}
     />
   );
 
@@ -77,8 +82,8 @@ export default function FilterSidebar({
   }
 
   // Mobile bottom sheet — tall, with a dimming backdrop (the map underneath
-  // doesn't need to stay visible while editing filters).
-  const opened = sheet.translateClass === "translate-y-0";
+  // doesn't need to stay visible while editing filters). `opened` is computed
+  // above (it also drives the theme-color easing).
   return (
     <>
       <div
@@ -108,6 +113,16 @@ export default function FilterSidebar({
         </button>
       </div>
       <div ref={contentRef} className="px-4 pb-3 overflow-y-auto overscroll-contain flex-1">{panel}</div>
+      {/* Sticky footer: the sheet is non-modal, so Apply just dismisses it to
+          reveal the map result. */}
+      <div className="shrink-0 border-t border-gray-100 px-4 py-2.5">
+        <button
+          onClick={sheet.requestClose}
+          className="w-full rounded-lg bg-blue-500 active:bg-blue-600 text-white font-semibold py-3 text-sm transition-colors"
+        >
+          Apply
+        </button>
+      </div>
     </div>
     </>
   );
