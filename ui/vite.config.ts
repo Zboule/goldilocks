@@ -5,7 +5,9 @@ import { copyFileSync, mkdirSync } from "fs";
 import { resolve } from "path";
 import type { Plugin } from "vite";
 
-const base = process.env.GITHUB_ACTIONS ? "/goldilocks/" : "/";
+// Served from the apex custom domain goldi.zone (root path), so base is "/" everywhere.
+// (Was "/goldilocks/" under GITHUB_ACTIONS when the site lived at zboule.github.io/goldilocks/.)
+const base = "/";
 
 function copyFavicon(): Plugin {
   return {

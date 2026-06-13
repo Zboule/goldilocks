@@ -38,6 +38,9 @@ jobs:
         working-directory: ui
         run: pnpm build
 
+      - name: Write CNAME for custom domain
+        run: echo "goldi.zone" > ui/dist/CNAME
+
       - name: Download tiles and static assets from release
         run: |
           gh release download v3.0.0 --repo Zboule/goldilocks \
