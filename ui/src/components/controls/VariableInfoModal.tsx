@@ -45,6 +45,29 @@ function RangeTable({ ranges, variableKey }: { ranges: ReferenceRange[]; variabl
   );
 }
 
+/** Just the content — reused by the desktop modal and the mobile in-sheet page. */
+export function VariableInfoBody({ variableKey }: { variableKey: string }) {
+  const detail = VARIABLE_DETAILS[variableKey];
+  if (!detail) {
+    return <div className="text-xs text-gray-400">No details available for this layer.</div>;
+  }
+  return (
+    <dl className="space-y-3">
+      {detail.ranges && detail.ranges.length > 0 && (
+        <RangeTable ranges={detail.ranges} variableKey={variableKey} />
+      )}
+      <div className="border-t border-gray-100 pt-3">
+        <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Methodology</div>
+      </div>
+      <Section label="Data Source" text={detail.source} />
+      <Section label="Raw Variable" text={detail.rawVariable} />
+      <Section label="Derivation" text={detail.derivation} />
+      <Section label="Period Aggregation" text={detail.temporalAgg} />
+      <Section label="Statistics" text={detail.stats} />
+    </dl>
+  );
+}
+
 export default function VariableInfoModal({ variableKey, variableLabel, onClose }: Props) {
   const backdropRef = useRef<HTMLDivElement>(null);
   const detail = VARIABLE_DETAILS[variableKey];
@@ -72,25 +95,16 @@ export default function VariableInfoModal({ variableKey, variableLabel, onClose 
           <h2 className="font-semibold text-gray-800 text-sm">{variableLabel}</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-lg leading-none px-1"
+            aria-label="Close"
+            className="w-10 h-10 -mr-2 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 active:bg-gray-100 text-xl leading-none"
           >
             ×
           </button>
         </div>
 
-        <dl className="px-5 py-4 space-y-3">
-          {detail.ranges && detail.ranges.length > 0 && (
-            <RangeTable ranges={detail.ranges} variableKey={variableKey} />
-          )}
-          <div className="border-t border-gray-100 pt-3">
-            <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Methodology</div>
-          </div>
-          <Section label="Data Source" text={detail.source} />
-          <Section label="Raw Variable" text={detail.rawVariable} />
-          <Section label="Derivation" text={detail.derivation} />
-          <Section label="Period Aggregation" text={detail.temporalAgg} />
-          <Section label="Statistics" text={detail.stats} />
-        </dl>
+        <div className="px-5 py-4">
+          <VariableInfoBody variableKey={variableKey} />
+        </div>
       </div>
     </div>
   );

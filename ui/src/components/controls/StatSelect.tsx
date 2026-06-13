@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import CustomSelect from "./CustomSelect";
 
 const STAT_LABELS: Record<string, string> = {
@@ -15,10 +16,12 @@ interface Props {
   onChange: (v: string) => void;
   stats: string[];
   className?: string;
+  renderInfo?: () => ReactNode;
+  infoTitle?: string;
 }
 
-export default function StatSelect({ value, onChange, stats, className }: Props) {
+export default function StatSelect({ value, onChange, stats, className, renderInfo, infoTitle }: Props) {
   const options = stats.map((s) => ({ value: s, label: STAT_LABELS[s] ?? s }));
 
-  return <CustomSelect value={value} onChange={onChange} options={options} className={className} minWidth="80px" />;
+  return <CustomSelect value={value} onChange={onChange} options={options} className={className} minWidth="80px" label="Statistic" renderInfo={renderInfo} infoTitle={infoTitle} />;
 }

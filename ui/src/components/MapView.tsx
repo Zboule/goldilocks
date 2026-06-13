@@ -14,11 +14,12 @@ interface HoverInfo {
 export interface MapViewHandle {
   setPolygons: (cells: StaticCell[]) => void;
   updateColors: (colors: Uint8Array, version: number) => void;
+  setPinnedIndex: (gridIndex: number | null) => void;
 }
 
 interface Props {
   onHover?: (info: HoverInfo | null) => void;
-  onClick?: () => void;
+  onClick?: (info: HoverInfo | null) => void;
   onReady?: () => void;
 }
 
@@ -51,13 +52,35 @@ const MapView = forwardRef<MapViewHandle, Props>(({ onHover, onClick, onReady },
         updateDeckLayer();
       }
     },
+    setPinnedIndex(gridIndex: number | null) {
+      pinnedCellRef.current = gridIndex === null ? null : findCellByGridIndex(gridIndex);
+      if (overlayRef.current && cellsRef.current.length > 0) {
+        updateDeckLayer();
+      }
+    },
   }), []);
+
+  // Cells are built in grid order, so grid index is binary-searchable.
+  function findCellByGridIndex(gridIndex: number): StaticCell | null {
+    const cells = cellsRef.current;
+    let lo = 0;
+    let hi = cells.length - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >>> 1;
+      const v = cells[mid].index;
+      if (v === gridIndex) return cells[mid];
+      if (v < gridIndex) lo = mid + 1;
+      else hi = mid - 1;
+    }
+    return null;
+  }
 
   function updateDeckLayer() {
     if (!overlayRef.current) return;
     const cells = cellsRef.current;
     const colors = colorsRef.current;
     const version = colorVersionRef.current;
+    const pinned = pinnedCellRef.current;
 
     overlayRef.current.setProps({
       layers: [
@@ -83,9 +106,22 @@ const MapView = forwardRef<MapViewHandle, Props>(({ onHover, onClick, onReady },
             getFillColor: [version],
           },
         }),
+        new PolygonLayer<StaticCell>({
+          id: "pinned-outline",
+          data: pinned ? [pinned] : [],
+          getPolygon: (d) => d.polygon,
+          filled: false,
+          stroked: true,
+          getLineColor: [37, 99, 235, 255],
+          getLineWidth: 2,
+          lineWidthUnits: "pixels",
+          pickable: false,
+        }),
       ],
     });
   }
+
+  const pinnedCellRef = useRef<StaticCell | null>(null);
 
   const firstLabelLayerRef = useRef<string | null>(null);
 
@@ -209,8 +245,16 @@ const MapView = forwardRef<MapViewHandle, Props>(({ onHover, onClick, onReady },
             onHoverRef.current?.(null);
           });
 
-          map.getCanvas().addEventListener("click", () => {
-            onClickRef.current?.();
+          map.getCanvas().addEventListener("click", (e) => {
+            // Pick the cell at click time so pinning never relies on a possibly
+            // stale React hover state (critical for tap-to-pin on touch).
+            const picked = overlay.pickObject({ x: e.offsetX, y: e.offsetY, radius: 0 });
+            if (picked?.object) {
+              const cell = picked.object as StaticCell;
+              onClickRef.current?.({ index: cell.index, x: e.clientX, y: e.clientY });
+            } else {
+              onClickRef.current?.(null);
+            }
           });
 
           overlayRef.current = overlay;
@@ -235,7 +279,7 @@ const MapView = forwardRef<MapViewHandle, Props>(({ onHover, onClick, onReady },
   return (
     <div className="w-full h-full relative">
       <div ref={containerRef} className="w-full h-full" />
-      <div className="absolute bottom-0 right-0 z-10 flex items-end gap-1 p-1">
+      <div className="absolute bottom-0 max-md:bottom-16 right-0 z-10 flex items-end gap-1 p-1">
         {attribOpen && (
           <div className="bg-white/60 text-[10px] text-gray-500 px-2 py-1 rounded shadow">
             © <a href="https://openfreemap.org" target="_blank" rel="noopener noreferrer" className="underline">OpenFreeMap</a>

@@ -1,10 +1,65 @@
 import type { Manifest, CountryInfo } from "../types";
 
+// --- In-memory decoded-tile cache (LRU, byte-bounded) ---
+// Each decoded tile is a full-grid Float32Array (~4 MB). The raw .bin bytes
+// live in the persistent Cache API (disk), so evicting a decoded tile here
+// just drops its in-memory expansion — it can be rebuilt cheaply from disk
+// with no network. This bounds memory during Play across many periods/filters
+// (the previous unbounded Map could grow past 1 GB and get the tab OOM-killed).
 const cache = new Map<string, Float32Array>();
 const inflight = new Map<string, Promise<Float32Array>>();
+let _cacheBytes = 0;
 
+// Budget scales with device RAM (navigator.deviceMemory is coarse GB), clamped
+// to a sane mobile-safe window. ~48 MB per GB → 4 GB phone ≈ 192 MB of tiles.
+const DECODED_CACHE_LIMIT_BYTES = (() => {
+  const dm = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+  const mb = typeof dm === "number" && dm > 0 ? Math.max(120, Math.min(384, dm * 48)) : 240;
+  return mb * 1024 * 1024;
+})();
+
+/** Read + promote to most-recently-used. */
+function cacheGet(key: string): Float32Array | undefined {
+  const v = cache.get(key);
+  if (v !== undefined) {
+    cache.delete(key);
+    cache.set(key, v);
+  }
+  return v;
+}
+
+/** Insert + evict least-recently-used tiles until back under budget. */
+function cacheSet(key: string, data: Float32Array) {
+  const prev = cache.get(key);
+  if (prev) {
+    _cacheBytes -= prev.byteLength;
+    cache.delete(key);
+  }
+  cache.set(key, data);
+  _cacheBytes += data.byteLength;
+  while (_cacheBytes > DECODED_CACHE_LIMIT_BYTES && cache.size > 1) {
+    const oldest = cache.keys().next().value as string | undefined;
+    if (oldest === undefined || oldest === key) break;
+    const t = cache.get(oldest);
+    if (t) _cacheBytes -= t.byteLength;
+    cache.delete(oldest);
+  }
+}
+
+// --- Tooltip chunk cache (count-bounded LRU) ---
+const CHUNK_CACHE_LIMIT = 300;
 const chunkCache = new Map<string, Uint8Array>();
 const chunkInflight = new Map<string, Promise<Uint8Array>>();
+
+function chunkCacheSet(key: string, data: Uint8Array) {
+  if (chunkCache.has(key)) chunkCache.delete(key);
+  chunkCache.set(key, data);
+  while (chunkCache.size > CHUNK_CACHE_LIMIT) {
+    const oldest = chunkCache.keys().next().value as string | undefined;
+    if (oldest === undefined) break;
+    chunkCache.delete(oldest);
+  }
+}
 
 let _manifest: Manifest | null = null;
 let _landIndex: Uint32Array | null = null;
@@ -183,7 +238,7 @@ export async function fetchChunkData(landArrayIndex: number, periodIdx: number):
       if (!resp.ok) return new Uint8Array(0);
       const buf = await resp.arrayBuffer();
       const data = new Uint8Array(buf);
-      chunkCache.set(cacheKey, data);
+      chunkCacheSet(cacheKey, data);
       return data;
     } catch {
       return new Uint8Array(0);
@@ -305,7 +360,7 @@ export async function fetchTile(
 ): Promise<Float32Array> {
   const key = makeKey(variable, stat, period);
 
-  const cached = cache.get(key);
+  const cached = cacheGet(key);
   if (cached) return cached;
 
   const existing = inflight.get(key);
@@ -345,7 +400,7 @@ export async function fetchTile(
         }
       }
 
-      cache.set(key, data);
+      cacheSet(key, data);
       return data;
     } finally {
       inflight.delete(key);
@@ -362,7 +417,7 @@ export function getCached(
   stat: string,
   period: number,
 ): Float32Array | null {
-  return cache.get(makeKey(variable, stat, period)) ?? null;
+  return cacheGet(makeKey(variable, stat, period)) ?? null;
 }
 
 export function getCachedValue(

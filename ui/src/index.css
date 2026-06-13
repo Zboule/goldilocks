@@ -10,3 +10,29 @@ body,
   overflow: hidden;
   font-family: system-ui, -apple-system, sans-serif;
 }
+
+/* Mobile browsers: 100vh includes the URL bar; dvh tracks the visible viewport. */
+@supports (height: 100dvh) {
+  html,
+  body,
+  #root {
+    height: 100dvh;
+  }
+}
+
+/* Loading pill: appear only if loading outlasts ~150ms, then fade in.
+   Prevents a flash on cache hits. */
+@keyframes pill-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.loading-pill {
+  animation: pill-fade-in 150ms ease-out 150ms both;
+}
+
+/* Touch devices: pinch-to-zoom and rotate gestures replace the nav buttons. */
+@media (max-width: 767px) and (pointer: coarse) {
+  .maplibregl-ctrl-top-right .maplibregl-ctrl-group {
+    display: none !important;
+  }
+}

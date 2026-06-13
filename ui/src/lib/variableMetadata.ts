@@ -56,6 +56,31 @@ export const VARIABLE_GROUPS: VariableGroup[] = [
   },
 ];
 
+/**
+ * Compact display names for narrow contexts (mobile header trigger, tooltip
+ * table rows) where the full labels truncate into ambiguity
+ * ("Feels Like – …" ×4). Full labels remain everywhere else.
+ */
+export const SHORT_LABELS: Record<string, string> = {
+  utci_day: "UTCI Day",
+  utci_night: "UTCI Night",
+  apparent_temperature_day: "BOM Day",
+  apparent_temperature_night: "BOM Night",
+  temperature_day: "Day Temp",
+  temperature_night: "Night Temp",
+  diurnal_range: "Diurnal Δ",
+  dew_point: "Dew Point",
+  relative_humidity: "Humidity",
+  wind_speed: "Wind",
+  precipitation: "Precip",
+  rainy_hours_day: "Rain Hrs Day",
+  rainy_hours_night: "Rain Hrs Night",
+  rainy_hours: "Rain Hrs 24h",
+  cloud_cover: "Cloud",
+  solar_radiation: "Sunshine",
+  travel_safety: "Safety",
+};
+
 export const VARIABLE_DETAILS: Record<string, VariableDetail> = {
   temperature_day: {
     id: "temperature_day",

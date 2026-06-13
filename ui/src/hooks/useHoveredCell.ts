@@ -24,11 +24,17 @@ function aggregateStat(stat: string, values: (number | null)[]): number | null {
   if (valid.length === 1) return valid[0];
   switch (stat) {
     case "max":
-    case "p90":
-      return Math.max(...valid);
+    case "p90": {
+      let m = valid[0];
+      for (let i = 1; i < valid.length; i++) if (valid[i] > m) m = valid[i];
+      return m;
+    }
     case "min":
-    case "p10":
-      return Math.min(...valid);
+    case "p10": {
+      let m = valid[0];
+      for (let i = 1; i < valid.length; i++) if (valid[i] < m) m = valid[i];
+      return m;
+    }
     case "mean":
     case "median":
     default:

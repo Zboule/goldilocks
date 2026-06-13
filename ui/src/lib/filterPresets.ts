@@ -19,7 +19,7 @@ export const PRESETS: FilterPreset[] = [
   {
     id: "enjoyable",
     label: "Enjoyable Climate",
-    description: "Pleasant typical days (14–30°C), comfortable nights, not too dry, little daytime rain, not too windy",
+    description: "Mild days, comfy nights, dry and calm",
     emoji: "🌤",
     filters: [
       { variable: "utci_day", stat: "median", operator: "between", value: 14, value2: 30 },
@@ -35,7 +35,7 @@ export const PRESETS: FilterPreset[] = [
   {
     id: "beach",
     label: "Beach Holiday",
-    description: "Warm typical days (>26°C), dry daytimes, tropical but breathable, sunny",
+    description: "Warm, sunny, dry days by the sea",
     emoji: "🏖",
     filters: [
       { variable: "utci_day", stat: "median", operator: ">", value: 26 },
@@ -48,7 +48,7 @@ export const PRESETS: FilterPreset[] = [
   {
     id: "hiking",
     label: "Hiking / Trekking",
-    description: "Comfortable for exertion (13–27°C), calm, dry daytimes, no heavy rain",
+    description: "Cool, calm, dry days for trekking",
     emoji: "🥾",
     filters: [
       { variable: "utci_day", stat: "median", operator: "between", value: 13, value2: 27 },
@@ -61,7 +61,7 @@ export const PRESETS: FilterPreset[] = [
   {
     id: "nomad",
     label: "Digital Nomad",
-    description: "Warm & comfortable (18–32°C), not oppressively humid, mostly dry daytimes",
+    description: "Warm, comfy, not too humid",
     emoji: "💻",
     filters: [
       { variable: "utci_day", stat: "median", operator: "between", value: 18, value2: 32 },
@@ -73,7 +73,7 @@ export const PRESETS: FilterPreset[] = [
   {
     id: "dry-sunny",
     label: "Dry & Sunny",
-    description: "Low dew point, strong sunshine, clear skies",
+    description: "Dry air, strong sun, clear skies",
     emoji: "☀️",
     filters: [
       { variable: "dew_point", stat: "mean", operator: "<", value: 10 },
@@ -84,7 +84,7 @@ export const PRESETS: FilterPreset[] = [
   {
     id: "year-round",
     label: "Best Year-Round",
-    description: "Pleasant in every period — select all periods first",
+    description: "Pleasant every period (pick all first)",
     emoji: "🌍",
     filters: [
       { variable: "utci_day", stat: "median", operator: "between", value: 14, value2: 30 },
@@ -97,3 +97,28 @@ export const PRESETS: FilterPreset[] = [
     ],
   },
 ];
+
+/**
+ * Does the current filter list exactly match a preset's base filters
+ * (ignoring the optional travel-safety filter)? Used to highlight the
+ * applied preset truthfully — survives sheet remounts and user edits.
+ */
+export function matchingPresetId(filters: Filter[]): string | null {
+  const key = (f: Omit<Filter, "id">) =>
+    `${f.variable}|${f.stat}|${f.operator}|${f.value}|${f.value2 ?? ""}`;
+  const current = filters
+    .filter((f) => f.variable !== "travel_safety")
+    .map(key)
+    .sort()
+    .join(";");
+  if (!current) return null;
+  for (const preset of PRESETS) {
+    const base = preset.filters
+      .filter((f) => f.variable !== "travel_safety")
+      .map(key)
+      .sort()
+      .join(";");
+    if (base === current) return preset.id;
+  }
+  return null;
+}

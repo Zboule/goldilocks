@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { Manifest } from "../../types";
 import CustomSelect from "./CustomSelect";
 import { VARIABLE_GROUPS } from "../../lib/variableMetadata";
@@ -8,9 +9,12 @@ interface Props {
   manifest: Manifest;
   className?: string;
   excludeCategorical?: boolean;
+  label?: string;
+  renderInfo?: () => ReactNode;
+  infoTitle?: string;
 }
 
-export default function VariableSelect({ value, onChange, manifest, className, excludeCategorical }: Props) {
+export default function VariableSelect({ value, onChange, manifest, className, excludeCategorical, label, renderInfo, infoTitle }: Props) {
   const groups = VARIABLE_GROUPS
     .map((g) => ({
       label: g.label,
@@ -24,5 +28,5 @@ export default function VariableSelect({ value, onChange, manifest, className, e
     }))
     .filter((g) => g.options.length > 0);
 
-  return <CustomSelect value={value} onChange={onChange} groups={groups} className={className} minWidth="225px" />;
+  return <CustomSelect value={value} onChange={onChange} groups={groups} className={className} minWidth="225px" label={label ?? "Map layer"} renderInfo={renderInfo} infoTitle={infoTitle} />;
 }

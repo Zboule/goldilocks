@@ -10,7 +10,9 @@ type Action =
   | { type: "SET_ACTIVE"; period: number }
   | { type: "INIT"; period: number }
   | { type: "LOCK_ALL"; periods: number[] }
-  | { type: "CLEAR_LOCKED" };
+  | { type: "CLEAR_LOCKED" }
+  | { type: "CLEAR_ACTIVE" }
+  | { type: "TOGGLE_GROUP"; periods: number[] };
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
@@ -53,6 +55,30 @@ function reducer(state: State, action: Action): State {
       return { locked: new Set(), active: first };
     }
 
+    // Drop the preview period (e.g. after Play stops, so the animation's
+    // landing point doesn't silently join a locked selection).
+    case "CLEAR_ACTIVE": {
+      if (state.active === null) return state;
+      if (state.locked.size === 0) return state; // keep something selected
+      return { ...state, active: null };
+    }
+
+    // Lock a whole group (month) at once; if all already locked, unlock them.
+    case "TOGGLE_GROUP": {
+      const allLocked = action.periods.every((p) => state.locked.has(p));
+      const next = new Set(state.locked);
+      if (allLocked) {
+        for (const p of action.periods) next.delete(p);
+        if (next.size === 0 && state.active === null) {
+          return { locked: next, active: action.periods[0] };
+        }
+        return { ...state, locked: next };
+      }
+      for (const p of action.periods) next.add(p);
+      const active = state.active !== null && next.has(state.active) ? null : state.active;
+      return { locked: next, active };
+    }
+
     default:
       return state;
   }
@@ -75,6 +101,8 @@ export function usePeriodSelection() {
   const init = useCallback((p: number) => dispatch({ type: "INIT", period: p }), []);
   const lockAll = useCallback((periods: number[]) => dispatch({ type: "LOCK_ALL", periods }), []);
   const clearLocked = useCallback(() => dispatch({ type: "CLEAR_LOCKED" }), []);
+  const clearActive = useCallback(() => dispatch({ type: "CLEAR_ACTIVE" }), []);
+  const toggleGroup = useCallback((periods: number[]) => dispatch({ type: "TOGGLE_GROUP", periods }), []);
 
   return {
     lockedPeriods: state.locked,
@@ -85,5 +113,7 @@ export function usePeriodSelection() {
     init,
     lockAll,
     clearLocked,
+    clearActive,
+    toggleGroup,
   };
 }

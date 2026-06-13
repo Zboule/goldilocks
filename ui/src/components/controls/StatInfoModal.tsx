@@ -51,6 +51,26 @@ const STATS = [
 
 const EVENT_NOTE = "For event-frequency variables (Rainy Days, Hot Days, etc.), all stats are computed across per-year fractions, not individual days. Mean = typical fraction of event days, P10/P90 = the range across years.";
 
+/** Just the content — reused by the desktop modal and the mobile in-sheet page. */
+export function StatInfoBody() {
+  return (
+    <div className="space-y-4">
+      {STATS.map((s) => (
+        <div key={s.key}>
+          <div className="font-semibold text-gray-700 text-xs">{s.name}</div>
+          <div className="text-gray-500 text-xs leading-relaxed mt-0.5">{s.description}</div>
+          <div className="text-gray-400 text-[11px] italic mt-0.5">{s.tip}</div>
+        </div>
+      ))}
+
+      <div className="border-t border-gray-100 pt-3">
+        <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Note on Event Frequencies</div>
+        <div className="text-gray-500 text-xs leading-relaxed">{EVENT_NOTE}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function StatInfoModal({ onClose }: Props) {
   const backdropRef = useRef<HTMLDivElement>(null);
 
@@ -75,25 +95,15 @@ export default function StatInfoModal({ onClose }: Props) {
           <h2 className="font-semibold text-gray-800 text-sm">Statistics Guide</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-lg leading-none px-1"
+            aria-label="Close"
+            className="w-10 h-10 -mr-2 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 active:bg-gray-100 text-xl leading-none"
           >
             ×
           </button>
         </div>
 
-        <div className="px-5 py-4 space-y-4">
-          {STATS.map((s) => (
-            <div key={s.key}>
-              <div className="font-semibold text-gray-700 text-xs">{s.name}</div>
-              <div className="text-gray-500 text-xs leading-relaxed mt-0.5">{s.description}</div>
-              <div className="text-gray-400 text-[11px] italic mt-0.5">{s.tip}</div>
-            </div>
-          ))}
-
-          <div className="border-t border-gray-100 pt-3">
-            <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Note on Event Frequencies</div>
-            <div className="text-gray-500 text-xs leading-relaxed">{EVENT_NOTE}</div>
-          </div>
+        <div className="px-5 py-4">
+          <StatInfoBody />
         </div>
       </div>
     </div>
